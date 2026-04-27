@@ -132,9 +132,17 @@ GIT_MANAGER=$(tmux split-window -v -t "$DEVELOPER" \
   -c "$AGENTS/git-manager" -P -F '#{pane_id}')
 
 tmux select-layout -t $SESSION:0 tiled
-# Interface limpa: sem status bar inferior nem barra de borda superior
+# Interface limpa: sem status bar inferior, com título no topo de cada pane.
 tmux set -t $SESSION -g status off
-tmux set -t $SESSION -g pane-border-status off
+tmux set -t $SESSION -g pane-border-status top
+# Usa variável user-defined @role_label (resistente a sobrescritas que
+# claude/codex fazem em pane_title via escape sequences).
+tmux set -t $SESSION -g pane-border-format " #{@role_label} "
+
+tmux set -t "$PLANNER"     -p @role_label "PLANNER"
+tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER"
+tmux set -t "$REVIEWER"    -p @role_label "REVIEWER"
+tmux set -t "$GIT_MANAGER" -p @role_label "GIT-MANAGER"
 
 tmux send-keys -t "$PLANNER"     "$PLANNER_CMD"     Enter
 tmux send-keys -t "$DEVELOPER"   "$DEVELOPER_CMD"   Enter
