@@ -12,6 +12,8 @@
 
 Orquestrador multi-agente em terminal. Quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios. Os arquivos de controle ficam fora do projeto, em `~/agent-hub/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
 
+![Sessão tmux com os 4 agentes](docs/screenshots/panes.png)
+
 ## Por que
 
 Trabalhar com LLM-CLIs sozinho em um único terminal é OK pra tarefas pequenas. Mas quando o trabalho exige **planejar, executar, revisar criticamente e abrir um PR**, fica mais produtivo dividir em papéis: cada estágio com seu prompt focado, cada um podendo usar um modelo/CLI diferente, e o usuário mantendo controle de aprovação entre passos.
@@ -64,11 +66,19 @@ O instalador cria o symlink `~/.local/bin/ghcm` e verifica dependências. Se `~/
 
 ```bash
 cd /seu/projeto-git
-ghcm start          # abre tmux com os 4 painéis (planner, developer, reviewer, git-manager)
-ghcm config         # edita comandos por role (~/agent-hub/config.sh)
-ghcm stop           # encerra a sessão
-ghcm help           # ajuda
+ghcm start                  # abre sessão tmux 'agents-<slug>' com os 4 painéis
+ghcm attach [slug]          # reconecta numa sessão existente (default: cwd)
+ghcm switch [slug]          # alterna entre sessões (lista interativa se >1)
+ghcm stop [slug|--all]      # encerra a sessão (default: cwd; --all encerra todas)
+ghcm status [slug]          # planos/reviews do projeto (default: current)
+ghcm list                   # sessões tmux ativas
+ghcm config                 # edita ~/agent-hub/config.sh
+ghcm config --reset         # restaura config.sh do template
+ghcm logs [name]            # lista logs ou mostra um específico
+ghcm help                   # ajuda
 ```
+
+![Tela inicial do ghcm start](docs/screenshots/boot.png)
 
 Dentro do tmux:
 
@@ -79,11 +89,26 @@ Dentro do tmux:
 | bottom-left | reviewer | "verifique reviews pendentes" |
 | bottom-right | git-manager | "envie aprovados" |
 
-`Ctrl-b d` desanexa sem matar a sessão (`tmux attach -t agents` pra voltar).
+Cada projeto tem sua **própria sessão tmux** (`agents-<slug>`), então você pode ter vários projetos abertos ao mesmo tempo sem conflito. `Ctrl-b d` desanexa sem matar (`ghcm attach` pra voltar).
+
+Quando um agente termina de responder e fica 5s silencioso, o tmux pisca o border do pane (sinal visual de "pronto pra próxima"). Configurável via `monitor-silence` na sessão.
+
+### Trabalhando em vários projetos
+
+```bash
+cd ~/projeto-a && ghcm start    # cria sessão agents-projeto-a
+# Ctrl-b d pra desanexar
+cd ~/projeto-b && ghcm start    # cria sessão agents-projeto-b
+ghcm list                       # mostra as duas sessões ativas
+ghcm switch projeto-a           # alterna pra projeto-a (atualiza current-project automaticamente)
+ghcm switch                     # menu interativo se houver >1 sessão
+```
+
+> **Atenção**: alternar sessões com `Ctrl-b s` (atalho nativo do tmux) **não atualiza** `current-project.txt`. Os agentes vão ler o caminho do projeto errado. Use `ghcm switch` em vez de `Ctrl-b s` quando alternar entre projetos.
 
 ### Primeira vez num projeto
 
-Se o projeto não tiver `CLAUDE.md` nem `AGENTS.md`, o `ghcm start` roda `claude /init` headless antes de subir o tmux pra mapear o stack/arquitetura. Isso melhora muito a qualidade dos planos e revisões. Saída em `/tmp/agent-hub-init.log`.
+Se o projeto não tiver `CLAUDE.md` nem `AGENTS.md`, o `ghcm start` roda `claude /init` headless antes de subir o tmux pra mapear o stack/arquitetura. Isso melhora muito a qualidade dos planos e revisões. O log é gravado em `~/agent-hub/logs/<timestamp>-init-<slug>.log` e mostrado em tempo real durante a execução (`ghcm logs` lista o histórico).
 
 ## Configurando os CLIs
 
@@ -102,7 +127,7 @@ Misture os modelos como quiser. Restrição: **ollama não funciona em roles que
 
 ```
 ~/agent-hub/
-├── ghcm                              entrypoint (start | config | stop | help)
+├── ghcm                              entrypoint (start | attach | switch | stop | status | list | config | logs | help)
 ├── start.sh                          setup do tmux (chamado por `ghcm start`)
 ├── install.sh                        cria symlink em ~/.local/bin
 ├── config.example.sh                 template; copiado pra config.sh no primeiro uso
@@ -111,12 +136,16 @@ Misture os modelos como quiser. Restrição: **ollama não funciona em roles que
 │   ├── developer/CLAUDE.md
 │   ├── reviewer/AGENTS.md            (codex lê AGENTS.md, claude lê CLAUDE.md)
 │   └── git-manager/CLAUDE.md
+├── logs/                             logs históricos timestamped (gitignored)
 └── state/<projeto>/                  estado por projeto (gitignored)
+    ├── .project-path                 caminho absoluto do projeto (escrito por start.sh)
     ├── plans/{pending,done}/
     └── reviews/{pending,done/{approved,rejected,shipped}}/
 ```
 
-`current-project.txt` (gitignored) registra o caminho absoluto do projeto ativo, escrito por `ghcm start`. Os agentes leem esse arquivo no começo de cada operação.
+Plans e reviews têm **frontmatter YAML obrigatório** (`id`, `created_at`, `project_slug`, `kind`, `status`, `version`, `type` em plans, `plan_ref`/`previous_review_ref` em reviews). `ghcm status` valida e avisa sobre arquivos legados sem frontmatter.
+
+`current-project.txt` (gitignored) registra o caminho do projeto ativo. Os agentes leem esse arquivo no começo de cada operação.
 
 ## Customizando os papéis
 
@@ -130,6 +159,7 @@ Cada papel é definido por um único arquivo de prompt em `agents/<role>/CLAUDE.
 
 - **macOS**: não testado. Provavelmente funciona com pequenos ajustes (`stat` flags, `realpath` etc.).
 - **WSL**: não testado.
+- **`current-project.txt` é global**: ao alternar entre sessões com `Ctrl-b s` (nativo do tmux), o `current-project.txt` não é atualizado. Use `ghcm switch` pra alternar.
 - **Bracketed paste do tmux**: se você notar que mensagens injetadas não submetem, pode ser preciso ajustar timing do `send-keys` (não usado no fluxo atual, mas relevante se você customizar).
 - **Cota dos provedores**: especialmente gemini free tier estoura rápido. Tenha redundância via `config.sh`.
 
