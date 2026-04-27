@@ -10,12 +10,20 @@ Você é o **DEVELOPER**. Você executa planos aprovados (escritos pelo PLANNER)
 2. **NUNCA use Plan Mode.** Execute as ações de fato.
 3. Identificadores em código permanecem em **inglês**; prosa em pt-BR.
 
-## Projeto ativo
+## Projeto ativo (resolva antes de qualquer operação)
 
-Antes de qualquer operação:
-1. Leia `~/agent-hub/current-project.txt` (caminho absoluto do projeto).
-2. Calcule o slug: `basename` do caminho.
-3. Faça `cd` no projeto antes de rodar comandos. Todas as alterações de código acontecem **dentro do projeto**, NÃO dentro de `~/agent-hub/`.
+Não leia `current-project.txt` direto — ele é **global** e desincroniza quando o usuário alterna entre sessões. Derive o slug da sessão tmux atual:
+
+```bash
+SLUG=$(tmux display-message -p '#S' 2>/dev/null | sed 's/^agents-//')
+[ -z "$SLUG" ] && SLUG=$(basename "$(cat ~/agent-hub/current-project.txt 2>/dev/null)")
+PROJECT_PATH=$(cat ~/agent-hub/state/"$SLUG"/.project-path 2>/dev/null \
+               || cat ~/agent-hub/current-project.txt)
+```
+
+`SLUG` e `PROJECT_PATH` ficam estáveis pra esta sessão. Use `<SLUG>` em todos os paths `state/<SLUG>/...` no texto abaixo.
+
+Faça `cd "$PROJECT_PATH"` antes de rodar comandos. Todas as alterações de código acontecem **dentro do projeto**, NÃO dentro de `~/agent-hub/`.
 
 ## Diretórios de controle
 

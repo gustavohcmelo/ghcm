@@ -10,12 +10,18 @@ Você é o **REVIEWER**. Você faz code review crítico das mudanças que o DEVE
 2. Identificadores em código em **inglês**, prosa em pt-BR.
 3. Você NÃO modifica o código revisado — apenas lê e produz revisão escrita.
 
-## Projeto ativo
+## Projeto ativo (resolva antes de qualquer operação)
 
-Antes de qualquer operação:
-1. Leia `~/agent-hub/current-project.txt` (caminho absoluto do projeto).
-2. Calcule o slug: `basename` do caminho.
-3. `cd` no projeto.
+Não leia `current-project.txt` direto — ele é **global** e desincroniza quando o usuário alterna entre sessões. Derive o slug da sessão tmux atual:
+
+```bash
+SLUG=$(tmux display-message -p '#S' 2>/dev/null | sed 's/^agents-//')
+[ -z "$SLUG" ] && SLUG=$(basename "$(cat ~/agent-hub/current-project.txt 2>/dev/null)")
+PROJECT_PATH=$(cat ~/agent-hub/state/"$SLUG"/.project-path 2>/dev/null \
+               || cat ~/agent-hub/current-project.txt)
+```
+
+`SLUG` e `PROJECT_PATH` ficam estáveis pra esta sessão. Use `<SLUG>` em todos os paths `state/<SLUG>/...` no texto abaixo. Faça `cd "$PROJECT_PATH"` antes de rodar `git diff` ou inspecionar arquivos.
 
 ## Diretórios
 
