@@ -139,10 +139,10 @@ tmux set -t $SESSION -g pane-border-status top
 # claude/codex fazem em pane_title via escape sequences).
 tmux set -t $SESSION -g pane-border-format " #{@role_label} "
 
-tmux set -t "$PLANNER"     -p @role_label "PLANNER"
-tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER"
-tmux set -t "$REVIEWER"    -p @role_label "REVIEWER"
-tmux set -t "$GIT_MANAGER" -p @role_label "GIT-MANAGER"
+tmux set -t "$PLANNER"     -p @role_label "PLANNER [${PLANNER_CMD%% *}]"
+tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER [${DEVELOPER_CMD%% *}]"
+tmux set -t "$REVIEWER"    -p @role_label "REVIEWER [${REVIEWER_CMD%% *}]"
+tmux set -t "$GIT_MANAGER" -p @role_label "GIT-MANAGER [${GIT_MANAGER_CMD%% *}]"
 
 tmux send-keys -t "$PLANNER"     "$PLANNER_CMD"     Enter
 tmux send-keys -t "$DEVELOPER"   "$DEVELOPER_CMD"   Enter
