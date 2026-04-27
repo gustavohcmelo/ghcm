@@ -1,0 +1,39 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck on shell scripts
+        uses: ludeeus/action-shellcheck@2.0.0
+        env:
+          # config.example.sh é sourced (não executado), shellcheck reclama de
+          # variáveis "não usadas" — desligamos só pra esse caso via SHELLCHECK_OPTS.
+          SHELLCHECK_OPTS: -e SC2034
+        with:
+          scandir: '.'
+          ignore_paths: 'state agents'
+
+  shfmt:
+    name: shfmt (formatting)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shfmt
+        run: |
+          curl -sSL https://github.com/mvdan/sh/releases/download/v3.8.0/shfmt_v3.8.0_linux_amd64 \
+            -o /usr/local/bin/shfmt
+          chmod +x /usr/local/bin/shfmt
+
+      - name: Check formatting
+        run: |
+          shfmt -d -i 2 -ci ghcm start.sh install.sh config.example.sh
