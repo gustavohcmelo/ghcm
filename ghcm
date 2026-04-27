@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ghcm — entrypoint do GHCM HUB-AGENTS.
-# Subcomandos: start, attach, switch, stop, status, list, config, logs, clean, help
+# Subcomandos: start, attach, switch, stop, status, list, plans, config, logs, clean, help
 
 set -e
 
@@ -19,6 +19,8 @@ Uso:
   ghcm stop [slug|--all]        Encerra sessão (default: do cwd; --all encerra todas)
   ghcm status [slug]            Mostra planos/reviews do projeto (default: current-project)
   ghcm list                     Lista sessões tmux ativas
+  ghcm plans [slug] [--pending|--all]   Lista planos (default: --all = pending + done)
+  ghcm plans [slug] export <plan-id>    Gera PDF em state/<slug>/exports/ (id parcial OK)
   ghcm config [--reset]         Edita config.sh (--reset restaura do template)
   ghcm logs [name]              Lista logs / mostra um log específico
   ghcm logs --prune [N]         Apaga logs antigos, mantém os últimos N (default 20)
@@ -76,6 +78,49 @@ has_frontmatter() {
   local file=$1
   [ -f "$file" ] || return 1
   head -1 "$file" 2>/dev/null | grep -q '^---$'
+}
+
+# Strip do frontmatter YAML (--- ... ---) das primeiras linhas.
+# Echoa o conteúdo restante. Se não tem frontmatter, echoa o arquivo todo.
+strip_frontmatter() {
+  local file=$1
+  awk '
+    BEGIN { fm = 0 }
+    NR == 1 && /^---$/ { fm = 1; next }
+    fm == 1 && /^---$/ { fm = 2; next }
+    fm != 1 { print }
+  ' "$file"
+}
+
+# Resolve plan-id (parcial ou completo) -> caminho absoluto do .md.
+# Procura em state/<slug>/plans/{pending,done}/. Echoa o caminho no stdout
+# se único; em caso de zero ou múltiplos matches, escreve mensagem em stderr
+# e retorna 1.
+find_plan() {
+  local slug=$1 query=$2
+  local state="$HUB/state/$slug"
+  local matches=()
+  local dir f
+  for dir in "$state/plans/pending" "$state/plans/done"; do
+    [ -d "$dir" ] || continue
+    while IFS= read -r f; do
+      [ -n "$f" ] && matches+=("$f")
+    done < <(find "$dir" -maxdepth 1 -type f -name "*${query}*.md" 2>/dev/null)
+  done
+
+  if [ ${#matches[@]} -eq 0 ]; then
+    echo "Erro: nenhum plano casa com '$query' em $state/plans/{pending,done}/" >&2
+    return 1
+  fi
+  if [ ${#matches[@]} -gt 1 ]; then
+    echo "Erro: '$query' é ambíguo — múltiplos planos casam:" >&2
+    for f in "${matches[@]}"; do
+      echo "  - $(basename "$f" .md)" >&2
+    done
+    echo "Refine o ID." >&2
+    return 1
+  fi
+  echo "${matches[0]}"
 }
 
 # Atualiza current-project.txt pro slug correspondente, lendo de
@@ -272,6 +317,107 @@ case "$cmd" in
     while IFS= read -r s; do
       echo "  ${s#$SESSION_PREFIX}"
     done <<< "$sessions"
+    ;;
+
+  plans)
+    # Args possíveis (em qualquer ordem):
+    #   [slug]                     — slug de um projeto conhecido (override do current)
+    #   --pending | --all          — filtro
+    #   export <plan-id>           — subcomando de exportação
+    action="list"
+    filter="--all"
+    plan_id=""
+    slug_arg=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        export)
+          action="export"
+          plan_id=${2:-}
+          shift 2 || shift
+          ;;
+        --pending|--all)
+          filter=$1
+          shift
+          ;;
+        -*)
+          echo "Flag desconhecida: $1" >&2
+          exit 1
+          ;;
+        *)
+          if [ -z "$slug_arg" ]; then
+            slug_arg=$1
+            shift
+          else
+            echo "Argumento extra: $1" >&2
+            exit 1
+          fi
+          ;;
+      esac
+    done
+
+    slug=$(resolve_slug "$slug_arg")
+    if [ -z "$slug" ]; then
+      echo "Erro: sem projeto ativo. Rode 'ghcm start' ou passe um slug." >&2
+      exit 1
+    fi
+    state="$HUB/state/$slug"
+    if [ ! -d "$state" ]; then
+      echo "Erro: projeto '$slug' sem state em $state." >&2
+      exit 1
+    fi
+
+    if [ "$action" = "export" ]; then
+      if [ -z "$plan_id" ]; then
+        echo "Uso: ghcm plans export <plan-id>" >&2
+        exit 1
+      fi
+      if ! command -v pandoc >/dev/null 2>&1; then
+        echo "Erro: pandoc não instalado. Rode: sudo apt install pandoc" >&2
+        exit 1
+      fi
+
+      plan_file=$(find_plan "$slug" "$plan_id") || exit 1
+
+      exports="$state/exports"
+      mkdir -p "$exports"
+
+      base=$(basename "$plan_file" .md)
+      out="$exports/$base.pdf"
+
+      # NÃO stripa frontmatter — pandoc lê os campos como metadata e o template
+      # injeta na capa (project_slug, status, type, created_at, version, id).
+      # Extrai o primeiro h1 do markdown pra usar como `title` (capa fica humana
+      # em vez de mostrar só o id técnico).
+      plan_title=$(awk '/^# / { sub(/^# +/, ""); print; exit }' "$plan_file")
+      css="$HUB/templates/plan-pdf.css"
+      tpl="$HUB/templates/plan-pdf-template.html"
+      pandoc_args=(-o "$out" --pdf-engine=weasyprint --standalone)
+      [ -f "$tpl" ] && pandoc_args+=(--template="$tpl")
+      [ -f "$css" ] && pandoc_args+=(--css="$css")
+      [ -n "$plan_title" ] && pandoc_args+=(--metadata "title=$plan_title")
+
+      if ! pandoc "$plan_file" "${pandoc_args[@]}"; then
+        echo "Erro: pandoc falhou ao gerar PDF." >&2
+        exit 1
+      fi
+      echo "$out"
+      exit 0
+    fi
+
+    # action=list
+    echo "Slug: $slug"
+    echo
+
+    pending_count=$(count_md "$state/plans/pending")
+    echo "Pending ($pending_count):"
+    list_md "$state/plans/pending" | sed 's/\.md$//' | sed 's/^/  /'
+
+    if [ "$filter" = "--all" ]; then
+      echo
+      done_count=$(count_md "$state/plans/done")
+      echo "Done ($done_count):"
+      list_md "$state/plans/done" | sed 's/\.md$//' | sed 's/^/  /'
+    fi
     ;;
 
   config)

@@ -47,6 +47,8 @@ Reviews reprovadas viram correções versionadas (`-v2`, `-v3`...) — o develop
 - **Linux** (testado em Ubuntu)
 - `tmux` (≥ 3.0)
 - `git`
+- `pandoc` (usado por `ghcm plans export` pra gerar PDF dos planos — `sudo apt install pandoc`)
+- `weasyprint` (engine de PDF do pandoc — `pip install weasyprint` ou via `pipx`)
 - Pelo menos uma CLI de LLM com tool use por papel:
   - [`claude`](https://docs.claude.com/en/docs/claude-code/quickstart) (Anthropic Claude Code)
   - [`codex`](https://github.com/openai/codex) (OpenAI Codex)
@@ -72,6 +74,8 @@ ghcm switch [slug]          # alterna entre sessões (lista interativa se >1)
 ghcm stop [slug|--all]      # encerra a sessão (default: cwd; --all encerra todas)
 ghcm status [slug]          # planos/reviews do projeto (default: current)
 ghcm list                   # sessões tmux ativas
+ghcm plans [slug] [--pending|--all]   # lista planos (default: --all = pending + done)
+ghcm plans [slug] export <plan-id>    # gera PDF do plano em state/<slug>/exports/
 ghcm config                 # edita ~/agent-hub/config.sh
 ghcm config --reset         # restaura config.sh do template
 ghcm logs [name]            # lista logs ou mostra um específico
@@ -97,7 +101,7 @@ Cada projeto tem sua **própria sessão tmux** (`agents-<slug>`), então você p
 - `Ctrl-b X` — encerra a sessão (com confirmação)
 - `Ctrl-b s` — alterna entre sessões abertas (seguro: agentes derivam o slug do nome da sessão atual)
 
-Quando um agente termina de responder e fica 5s silencioso, o tmux pisca o border do pane (sinal visual de "pronto pra próxima"). Configurável via `monitor-silence` na sessão.
+Quando um agente termina de responder e fica 5s silencioso, o tmux pisca o border do pane (sinal visual de "pronto pra próxima"). Configurável via `monitor-silence` na sessão. Cada pane tem **cor própria pra identificação rápida** (planner ciano, developer verde, reviewer amarelo, git-manager magenta) tanto no título quanto na borda — pane ativo destaca em tom mais brilhante.
 
 ### Trabalhando em vários projetos
 
@@ -111,6 +115,23 @@ ghcm switch                     # menu interativo se houver >1 sessão
 ```
 
 > Cada agente descobre seu projeto pelo nome da sessão tmux (`tmux display-message -p '#S'`), não pelo `current-project.txt`. Isso significa que `Ctrl-b s` (alternar nativo do tmux) também é seguro — o agente sempre lê o slug certo. Os comandos `ghcm switch`/`attach` continuam atualizando `current-project.txt` por compatibilidade com sessões em andamento, mas a fonte de verdade é o nome da sessão.
+
+### Exportar plano pra aprovação
+
+Quando um plano precisa de aval externo (gestor, cliente) antes de virar tarefa do developer, dá pra exportar como PDF formatado:
+
+```bash
+ghcm plans                                         # lista planos do projeto atual
+ghcm plans app-web --pending                  # só pendentes do projeto X
+ghcm plans app-web export installments-preview # gera PDF (id parcial OK)
+# -> /home/gustavo/agent-hub/state/app-web/exports/<id>.pdf
+```
+
+O comando ecoa só o path no stdout — fácil capturar (`pdf=$(ghcm plans ... export ...)`) ou abrir direto (`xdg-open "$(ghcm plans ... export ...)"`). Se o id casar com mais de um plano, mostra os candidatos pra refinar.
+
+O PDF tem capa estruturada (título, projeto, status com badge colorido, criado em, ID, bloco de assinatura "Aprovado por") + corpo formatado com tipografia serif/sans-serif, headings com barra lateral colorida por tema (verde "aceitação", laranja "riscos", azul "objetivo"), code blocks estilizados e paginação no rodapé.
+
+Customização visual: edite `~/agent-hub/templates/plan-pdf.css` (cores/tamanhos) ou `~/agent-hub/templates/plan-pdf-template.html` (layout da capa). O `ghcm` não precisa mudar.
 
 ### Primeira vez num projeto
 
@@ -142,11 +163,15 @@ Misture os modelos como quiser. Restrição: **ollama não funciona em roles que
 │   ├── developer/CLAUDE.md
 │   ├── reviewer/AGENTS.md            (codex lê AGENTS.md, claude lê CLAUDE.md)
 │   └── git-manager/CLAUDE.md
+├── templates/                        template/css usados por `ghcm plans export`
+│   ├── plan-pdf-template.html        layout da capa (pandoc HTML5 template)
+│   └── plan-pdf.css                  tipografia, cores, paginação
 ├── logs/                             logs históricos timestamped (gitignored)
 └── state/<projeto>/                  estado por projeto (gitignored)
     ├── .project-path                 caminho absoluto do projeto (escrito por start.sh)
     ├── plans/{pending,done}/
-    └── reviews/{pending,done/{approved,rejected,shipped}}/
+    ├── reviews/{pending,done/{approved,rejected,shipped}}/
+    └── exports/                      PDFs gerados por `ghcm plans export`
 ```
 
 Plans e reviews têm **frontmatter YAML obrigatório** (`id`, `created_at`, `project_slug`, `kind`, `status`, `version`, `type` em plans, `plan_ref`/`previous_review_ref` em reviews). `ghcm status` valida e avisa sobre arquivos legados sem frontmatter.

@@ -71,8 +71,9 @@ banner() {
 # obrigatórias. Avisa sobre opcionais (gh) sem abortar.
 preflight() {
   local missing=()
-  command -v tmux >/dev/null 2>&1 || missing+=("tmux")
-  command -v git  >/dev/null 2>&1 || missing+=("git")
+  command -v tmux   >/dev/null 2>&1 || missing+=("tmux")
+  command -v git    >/dev/null 2>&1 || missing+=("git")
+  command -v pandoc >/dev/null 2>&1 || missing+=("pandoc")
 
   local cmd_var cmd_val cli
   for cmd_var in PLANNER_CMD DEVELOPER_CMD REVIEWER_CMD GIT_MANAGER_CMD; do
@@ -280,10 +281,21 @@ tmux set -t "$SESSION" -g bell-action none
 # Ctrl-b X com confirmação interativa.
 tmux bind-key -T prefix X confirm-before -p "Encerrar sessão #S? (y/n)" kill-session
 
-tmux set -t "$PLANNER"     -p @role_label "PLANNER [${PLANNER_CMD%% *}]"
-tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER [${DEVELOPER_CMD%% *}]"
-tmux set -t "$REVIEWER"    -p @role_label "REVIEWER [${REVIEWER_CMD%% *}]"
-tmux set -t "$GIT_MANAGER" -p @role_label "GIT-MANAGER [${GIT_MANAGER_CMD%% *}]"
+tmux set -t "$PLANNER"     -p @role_label "#[fg=cyan,bold]PLANNER [${PLANNER_CMD%% *}]#[default]"
+tmux set -t "$DEVELOPER"   -p @role_label "#[fg=green,bold]DEVELOPER [${DEVELOPER_CMD%% *}]#[default]"
+tmux set -t "$REVIEWER"    -p @role_label "#[fg=yellow,bold]REVIEWER [${REVIEWER_CMD%% *}]#[default]"
+tmux set -t "$GIT_MANAGER" -p @role_label "#[fg=magenta,bold]GIT-MANAGER [${GIT_MANAGER_CMD%% *}]#[default]"
+
+# Cor da borda por pane: combina com a cor do título e ajuda a identificar
+# o agente de relance. -p define como pane option (não global).
+tmux set -t "$PLANNER"     -p pane-border-style        "fg=cyan"
+tmux set -t "$PLANNER"     -p pane-active-border-style "fg=brightcyan,bold"
+tmux set -t "$DEVELOPER"   -p pane-border-style        "fg=green"
+tmux set -t "$DEVELOPER"   -p pane-active-border-style "fg=brightgreen,bold"
+tmux set -t "$REVIEWER"    -p pane-border-style        "fg=yellow"
+tmux set -t "$REVIEWER"    -p pane-active-border-style "fg=brightyellow,bold"
+tmux set -t "$GIT_MANAGER" -p pane-border-style        "fg=magenta"
+tmux set -t "$GIT_MANAGER" -p pane-active-border-style "fg=brightmagenta,bold"
 
 tmux send-keys -t "$PLANNER"     "$PLANNER_CMD"     Enter
 tmux send-keys -t "$DEVELOPER"   "$DEVELOPER_CMD"   Enter

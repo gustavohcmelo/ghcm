@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <title>$if(title)$$title$$else$$id$$endif$</title>
+$for(css)$
+  <link rel="stylesheet" href="$css$" />
+$endfor$
+</head>
+<body>
+
+<section class="cover">
+  <div class="brand">GHCM HUB-AGENTS &middot; Plano para Aprovação</div>
+
+  <h1 class="cover-title">$if(title)$$title$$else$$id$$endif$</h1>
+
+  <dl class="meta">
+$if(project_slug)$
+    <dt>Projeto</dt><dd>$project_slug$</dd>
+$endif$
+$if(type)$
+    <dt>Tipo</dt><dd>$type$</dd>
+$endif$
+$if(status)$
+    <dt>Status</dt><dd><span class="badge status-$status$">$status$</span></dd>
+$endif$
+$if(created_at)$
+    <dt>Criado em</dt><dd>$created_at$</dd>
+$endif$
+$if(version)$
+    <dt>Versão</dt><dd>$version$</dd>
+$endif$
+$if(id)$
+    <dt>ID</dt><dd><code>$id$</code></dd>
+$endif$
+  </dl>
+
+  <div class="signature">
+    <div class="signature-label">Aprovado por:</div>
+    <div class="signature-line"></div>
+    <div class="signature-date">Data: ____ / ____ / ________</div>
+  </div>
+</section>
+
+<main>
+$body$
+</main>
+
+</body>
+</html>
