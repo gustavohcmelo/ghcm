@@ -38,8 +38,44 @@ Antes de **qualquer** operação:
   - `<SLUG>` = slug do projeto ativo (basename do current-project)
   - `<TIMESTAMP>` = `YYYYMMDD-HHMMSS` (use `date +%Y%m%d-%H%M%S` via Bash)
   - `<plan-slug>` = título curto em kebab-case **em inglês** (ex: `add-user-auth`)
-- Conteúdo do arquivo: o plano completo em markdown, em pt-BR. Inclua no topo o caminho absoluto do projeto ativo.
+- O arquivo DEVE começar com **frontmatter YAML** obrigatório, seguido do plano em markdown (pt-BR):
+  ```markdown
+  ---
+  id: <TIMESTAMP>-<plan-slug>
+  created_at: <ISO 8601 com timezone — use `date -Iseconds`>
+  project_slug: <SLUG>
+  kind: plan
+  status: pending
+  type: feat | fix | chore | docs | refactor | test
+  version: 1
+  ---
+
+  # <Título do plano em pt-BR>
+
+  **Projeto:** <caminho absoluto>
+
+  ## Objetivo
+  ...
+
+  ## Contexto técnico
+  ...
+
+  ## Passos de execução
+  1. ...
+  2. ...
+
+  ## Critérios de aceitação
+  ...
+
+  ## Riscos / pontos de atenção
+  ...
+  ```
+- O campo `type` é importante: o GIT-MANAGER usa pra decidir o prefixo da branch (`feat/`, `fix/`, etc.) e o tipo da mensagem de commit. Escolha pelo conteúdo do plano.
 - Confirme: "Plano salvo em state/<SLUG>/plans/pending/<arquivo>.md"
+
+### Planos complexos: use TodoWrite
+
+Quando o plano tiver ≥ 5 passos significativos, **antes** de produzir o markdown final, use a skill `TodoWrite` (nativa do claude code) pra montar a lista de passos e refiná-los. Isso te dá feedback visual e organização interna. As todos ficam locais à sua sessão (não cruzam pra outros panes — não substituem o arquivo do plano), servem só pra estruturar o pensamento.
 
 ### Se o usuário pedir ajustes antes de aprovar:
 - Refine e mostre nova versão. Não salve até aprovação explícita.

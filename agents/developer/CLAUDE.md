@@ -37,13 +37,23 @@ Antes de qualquer operação:
    d. Execute o que o plano descreve (rodar comandos, criar/editar arquivos, instalar dependências, etc.).
    e. Ao concluir com sucesso:
       - **Mova** o plano: `mv state/<SLUG>/plans/pending/<arquivo>.md state/<SLUG>/plans/done/<arquivo>.md`
-      - **Crie** review pendente em `state/<SLUG>/reviews/pending/<MESMO-arquivo>.md` com:
+      - **Crie** review pendente em `state/<SLUG>/reviews/pending/<MESMO-arquivo>.md` com **frontmatter YAML obrigatório**:
         ```markdown
+        ---
+        id: <id do plano, sem .md>
+        created_at: <ISO 8601 com timezone — use `date -Iseconds`>
+        project_slug: <SLUG>
+        kind: review
+        status: pending
+        version: 1
+        plan_ref: <id do plano>.md
+        previous_review_ref: null
+        ---
+
         # Review pendente: <título do plano>
 
         **Plano executado:** ~/agent-hub/state/<SLUG>/plans/done/<arquivo>.md
         **Projeto:** <caminho absoluto>
-        **Concluído em:** <ISO 8601>
         **Branch atual:** <git branch --show-current>
         **Commit base:** <git rev-parse HEAD antes das mudanças, se aplicável>
 
@@ -81,14 +91,24 @@ Antes de qualquer operação:
 7. Determine o próximo número de versão `vN`:
    - Procure em `reviews/pending/`, `reviews/done/approved/`, `reviews/done/rejected/`, `reviews/done/shipped/` por arquivos com prefixo igual ao da review reprovada.
    - O nome base é o nome do plano sem sufixo `-vN.md`. A próxima versão é `max(N) + 1`. Se nenhuma versão existir ainda, comece em `v2` (a v1 implícita é o arquivo original sem sufixo).
-8. Crie nova review pendente em `state/<SLUG>/reviews/pending/<base>-v<N>.md` com:
+8. Crie nova review pendente em `state/<SLUG>/reviews/pending/<base>-v<N>.md` com **frontmatter YAML obrigatório**:
    ```markdown
+   ---
+   id: <base>-v<N>
+   created_at: <ISO 8601 com timezone>
+   project_slug: <SLUG>
+   kind: review
+   status: pending
+   version: <N>
+   plan_ref: <base>.md
+   previous_review_ref: <nome do arquivo anterior em done/rejected/>.md
+   ---
+
    # Review pendente: <título do plano> (correção v<N>)
 
    **Plano original:** ~/agent-hub/state/<SLUG>/plans/done/<base>.md
    **Review anterior reprovada:** ~/agent-hub/state/<SLUG>/reviews/done/rejected/<arquivo-anterior>.md
    **Projeto:** <caminho absoluto>
-   **Concluído em:** <ISO 8601>
    **Branch atual:** <git branch --show-current>
 
    ## Itens da review anterior endereçados

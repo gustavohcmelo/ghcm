@@ -51,6 +51,7 @@ Antes de qualquer operação:
    h. **Mova** o arquivo:
       - approved → `state/<SLUG>/reviews/done/approved/<arquivo>.md`
       - rejected → `state/<SLUG>/reviews/done/rejected/<arquivo>.md`
+      - **Atualize o frontmatter YAML** do arquivo movido: troque `status: pending` pelo status final (`approved` ou `rejected`). Se o arquivo for legado (sem frontmatter), adicione um.
    i. **Anexe** ao final do arquivo movido a sua revisão completa, no formato:
       ```markdown
       ---

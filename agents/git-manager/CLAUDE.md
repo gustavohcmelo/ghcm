@@ -33,46 +33,46 @@ Antes de qualquer operação:
 2. Se vazio: "Nenhuma review aprovada para enviar." e pare.
 3. Para cada review aprovada, em ordem:
    a. Leia a review (status + ressalvas).
-   b. Leia o plano original em `state/<SLUG>/plans/done/<mesmo-arquivo>.md`.
-   c. Verifique `git status` no projeto:
-      - **Se há mudanças não commitadas relevantes** ao plano: prossiga (vai criar branch + commit).
-      - **Se working tree está limpo**: as mudanças já foram commitadas em alguma branch. Detecte qual (`git log --oneline` recente) e ajuste o fluxo (só push + PR).
-      - **Se há mudanças não relacionadas**: pare e alerte o usuário.
-   d. Determine o nome da branch a partir do nome do plano (sem timestamp). Ex: plano `20260427-103000-add-user-auth.md` → branch `feature/add-user-auth`. Adicione sufixo numérico se a branch já existir local ou remota.
-   e. Se ainda não está em branch dedicada:
-      - `git checkout -b feature/<plan-slug>`
-   f. Stage e commit:
+   b. Leia o plano original em `state/<SLUG>/plans/done/<arquivo-base>.md` (sem sufixo `-vN`).
+   c. Determine `<type>` da branch e do commit: leia o campo `type` no frontmatter YAML do plano. Se não existir (legado), infira pelo conteúdo (`feat` / `fix` / `chore` / `docs` / `refactor` / `test`).
+   d. Verifique `git status` no projeto:
+      - **Mudanças não commitadas relevantes** ao plano → prossiga (vai criar branch + commit).
+      - **Working tree limpo** → as mudanças já foram commitadas em alguma branch. Detecte qual (`git log --oneline` recente) e ajuste o fluxo (só push + PR).
+      - **Mudanças não relacionadas** → pare e alerte o usuário.
+   e. Defina o nome da branch: `<type>/<plan-slug>` (ex: `feat/add-magic-link`, `fix/null-pointer`). `<plan-slug>` é o slug do plano sem timestamp e sem `-vN`.
+   f. **Cheque PR existente antes de pushar:**
+      - `gh pr list --head <type>/<plan-slug> --state all --json number,state,url`
+      - Se há PR **aberto** pra essa branch → PARE e alerte (não duplique).
+      - Se há PR **fechado/merged** → adicione sufixo numérico no nome da branch (ex: `feat/add-magic-link-2`).
+      - Verifique também se a branch já existe (`git rev-parse --verify` local + `git ls-remote` remoto). Mesmo critério de sufixo.
+   g. Se ainda não está na branch dedicada: `git checkout -b <type>/<plan-slug>`.
+   h. Stage e commit:
       - `git add -A` (ou seletivo se a review listou arquivos específicos)
-      - `git commit -m "<mensagem>"` — mensagem em inglês, derivada do título do plano. Use formato:
+      - `git commit -m "<mensagem>"` — mensagem em inglês, no formato:
         ```
         <type>: <short summary in english>
 
-        <plan title in english (or original)>
+        <plan title in english>
 
         Plan: state/<SLUG>/plans/done/<arquivo>.md
         Review: state/<SLUG>/reviews/done/approved/<arquivo>.md
-
-        Co-Authored-By: agent-hub <noreply@agent-hub>
         ```
-        `<type>` = `feat` / `fix` / `chore` / `docs` / `refactor` / `test` (escolha pelo conteúdo do plano).
-   g. Push: `git push -u origin feature/<plan-slug>`.
-   h. Abra PR via `gh pr create`:
-      - Título em inglês, derivado do plano
-      - Body em pt-BR, com:
-        - Resumo do que foi feito (do plano)
-        - Lista de arquivos modificados
-        - Resumo da review (aprovado / aprovado com ressalvas + ressalvas, se houver)
-        - Link/path pro plano e pra review (paths absolutos)
-      - Use `--base` apropriado (provavelmente `main` ou `master` — detecte com `git symbolic-ref refs/remotes/origin/HEAD`).
+        **Não** inclua `Co-Authored-By` falso. A autoria do user (git config) já é registrada automaticamente.
+   i. Push: `git push -u origin <type>/<plan-slug>`.
+   j. Abra PR via `gh pr create`:
+      - Título em inglês, derivado do plano.
+      - Body em pt-BR, com: resumo do que foi feito; lista de arquivos modificados; resumo da review (status + ressalvas, se houver); paths absolutos pro plano e pra review.
+      - `--base`: detecte com `git symbolic-ref refs/remotes/origin/HEAD` (geralmente `main` ou `master`).
       - Use HEREDOC pro body (preserva formatação).
-   i. Capture a URL do PR retornada por `gh pr create` e mostre ao usuário.
-   j. **Mova** a review: `mv state/<SLUG>/reviews/done/approved/<arquivo>.md state/<SLUG>/reviews/done/shipped/<arquivo>.md`.
-   k. **Anexe** ao final do arquivo shipped uma seção:
+   k. Capture a URL do PR retornada por `gh pr create` e mostre ao usuário.
+   l. **Mova** a review: `mv state/<SLUG>/reviews/done/approved/<arquivo>.md state/<SLUG>/reviews/done/shipped/<arquivo>.md`.
+   m. **Atualize o frontmatter YAML** do arquivo movido: troque `status: approved` por `status: shipped`.
+   n. **Anexe** ao final do arquivo shipped:
       ```markdown
       ---
 
       ## SHIPPED (em <ISO 8601>)
-      - **Branch:** feature/<plan-slug>
+      - **Branch:** <type>/<plan-slug>
       - **Commit:** <git rev-parse HEAD>
       - **PR:** <URL>
       ```
