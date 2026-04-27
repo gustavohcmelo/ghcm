@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ghcm — entrypoint do GHCM HUB-AGENTS.
-# Subcomandos: start, stop, status, list, config, logs, help
+# Subcomandos: start, attach, switch, stop, status, list, config, logs, clean, help
 
 set -e
 
@@ -21,6 +21,8 @@ Uso:
   ghcm list                     Lista sessões tmux ativas
   ghcm config [--reset]         Edita config.sh (--reset restaura do template)
   ghcm logs [name]              Lista logs / mostra um log específico
+  ghcm logs --prune [N]         Apaga logs antigos, mantém os últimos N (default 20)
+  ghcm clean <slug> [--yes]     Apaga state/<slug>/ inteiro (planos e reviews)
   ghcm help                     Mostra esta ajuda
 
 Arquivos:
@@ -310,6 +312,26 @@ case "$cmd" in
   logs)
     target=${1:-}
     mkdir -p "$LOGS"
+
+    if [ "$target" = "--prune" ]; then
+      keep=${2:-20}
+      if ! [[ "$keep" =~ ^[0-9]+$ ]]; then
+        echo "Erro: --prune espera um número (ex: ghcm logs --prune 20)." >&2
+        exit 1
+      fi
+      total=$(find "$LOGS" -maxdepth 1 -type f 2>/dev/null | wc -l)
+      if [ "$total" -le "$keep" ]; then
+        echo "$total logs em $LOGS/ — nada a apagar (mantendo últimos $keep)."
+        exit 0
+      fi
+      to_delete=$((total - keep))
+      ls -1t "$LOGS" 2>/dev/null | tail -n "+$((keep + 1))" | while IFS= read -r f; do
+        rm -f "$LOGS/$f"
+      done
+      echo "Apagados $to_delete log(s). Mantidos $keep mais recentes."
+      exit 0
+    fi
+
     if [ -n "$target" ]; then
       log_file="$LOGS/$target"
       if [ ! -f "$log_file" ]; then
@@ -326,7 +348,55 @@ case "$cmd" in
     else
       ls -1t "$LOGS" 2>/dev/null | sed 's/^/  /'
       echo
-      echo "Pra ver um log: ghcm logs <nome>"
+      echo "Pra ver um log:    ghcm logs <nome>"
+      echo "Pra apagar antigos: ghcm logs --prune [N]   (default mantém 20)"
+    fi
+    ;;
+
+  clean)
+    target_slug=${1:-}
+    yes_flag=${2:-}
+    if [ -z "$target_slug" ]; then
+      echo "Erro: informe o slug. Uso: ghcm clean <slug> [--yes]" >&2
+      exit 1
+    fi
+    state="$HUB/state/$target_slug"
+    if [ ! -d "$state" ]; then
+      echo "Erro: '$state' não existe." >&2
+      exit 1
+    fi
+    session="${SESSION_PREFIX}${target_slug}"
+    if tmux has-session -t "$session" 2>/dev/null; then
+      echo "Erro: sessão '$session' está rodando. Encerre com 'ghcm stop $target_slug' antes." >&2
+      exit 1
+    fi
+
+    plans_pending=$(count_md "$state/plans/pending")
+    plans_done=$(count_md "$state/plans/done")
+    rev_pending=$(count_md "$state/reviews/pending")
+    rev_approved=$(count_md "$state/reviews/done/approved")
+    rev_rejected=$(count_md "$state/reviews/done/rejected")
+    rev_shipped=$(count_md "$state/reviews/done/shipped")
+
+    echo "Vai apagar permanentemente:"
+    echo "  $state"
+    echo "    plans:    $plans_pending pending, $plans_done done"
+    echo "    reviews:  $rev_pending pending, $rev_approved approved, $rev_rejected rejected, $rev_shipped shipped"
+    echo "Isso NÃO afeta o projeto em si (só o estado do orquestrador)."
+    echo
+
+    if [ "$yes_flag" != "--yes" ]; then
+      read -r -p "Confirma? [y/N] " ans
+      [[ "$ans" =~ ^[yY] ]] || { echo "Cancelado."; exit 0; }
+    fi
+
+    rm -rf "$state"
+    echo "OK: $state apagado."
+
+    # Se era o current-project, limpa current-project.txt também
+    if [ "$(current_slug)" = "$target_slug" ]; then
+      rm -f "$HUB/current-project.txt"
+      echo "OK: current-project.txt limpo (era esse projeto)."
     fi
     ;;
 
