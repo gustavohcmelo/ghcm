@@ -75,6 +75,8 @@ ghcm list                   # sessões tmux ativas
 ghcm config                 # edita ~/agent-hub/config.sh
 ghcm config --reset         # restaura config.sh do template
 ghcm logs [name]            # lista logs ou mostra um específico
+ghcm logs --prune [N]       # apaga logs antigos, mantém últimos N (default 20)
+ghcm clean <slug> [--yes]   # apaga state/<slug>/ (sessão precisa estar parada)
 ghcm help                   # ajuda
 ```
 
@@ -104,7 +106,7 @@ ghcm switch projeto-a           # alterna pra projeto-a (atualiza current-projec
 ghcm switch                     # menu interativo se houver >1 sessão
 ```
 
-> **Atenção**: alternar sessões com `Ctrl-b s` (atalho nativo do tmux) **não atualiza** `current-project.txt`. Os agentes vão ler o caminho do projeto errado. Use `ghcm switch` em vez de `Ctrl-b s` quando alternar entre projetos.
+> Cada agente descobre seu projeto pelo nome da sessão tmux (`tmux display-message -p '#S'`), não pelo `current-project.txt`. Isso significa que `Ctrl-b s` (alternar nativo do tmux) também é seguro — o agente sempre lê o slug certo. Os comandos `ghcm switch`/`attach` continuam atualizando `current-project.txt` por compatibilidade com sessões em andamento, mas a fonte de verdade é o nome da sessão.
 
 ### Primeira vez num projeto
 
@@ -159,7 +161,6 @@ Cada papel é definido por um único arquivo de prompt em `agents/<role>/CLAUDE.
 
 - **macOS**: não testado. Provavelmente funciona com pequenos ajustes (`stat` flags, `realpath` etc.).
 - **WSL**: não testado.
-- **`current-project.txt` é global**: ao alternar entre sessões com `Ctrl-b s` (nativo do tmux), o `current-project.txt` não é atualizado. Use `ghcm switch` pra alternar.
 - **Bracketed paste do tmux**: se você notar que mensagens injetadas não submetem, pode ser preciso ajustar timing do `send-keys` (não usado no fluxo atual, mas relevante se você customizar).
 - **Cota dos provedores**: especialmente gemini free tier estoura rápido. Tenha redundância via `config.sh`.
 
