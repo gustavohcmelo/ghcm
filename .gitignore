@@ -9,3 +9,6 @@ config.sh
 # Editor / OS
 *.swp
 .DS_Store
+
+# Blueprint
+docs
