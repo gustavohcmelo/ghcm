@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-SESSION=agents
 HUB="$HOME/agent-hub"
 AGENTS="$HUB/agents"
+LOGS="$HUB/logs"
 
 # Carrega config do usuário (comandos por role). Se config.sh não existe,
 # inicializa do template versionado. Defaults no fallback abaixo garantem
@@ -19,11 +19,12 @@ fi
 
 # ---------- helpers ----------
 
-banner() {
+# Banner ASCII completo (terminais largos).
+banner_full() {
   local C_TITLE C_TAG C_RESET
   if [ -t 1 ]; then
-    C_TITLE=$'\033[1;36m'   # ciano bold
-    C_TAG=$'\033[2;37m'     # cinza claro
+    C_TITLE=$'\033[1;36m'
+    C_TAG=$'\033[2;37m'
     C_RESET=$'\033[0m'
   fi
   cat <<EOF
@@ -41,22 +42,142 @@ ${C_TAG}     ------------------------
 EOF
 }
 
-progress_bar() {
-  local total=$1
-  local label=$2
-  local cols=40
-  local i pct filled empty bar
-  for ((i=0; i<=total; i++)); do
-    pct=$((i * 100 / total))
-    filled=$((i * cols / total))
-    empty=$((cols - filled))
-    bar=$(printf '%*s' "$filled" '' | tr ' ' '=')
-    bar+=$(printf '%*s' "$empty" ''   | tr ' ' '-')
-    printf "\r  %s [%s] %3d%% - %ds restantes  " "$label" "$bar" "$pct" "$((total - i))"
-    [ $i -lt $total ] && sleep 1
+# Banner compacto (terminais estreitos).
+banner_compact() {
+  local C_TITLE C_RESET
+  if [ -t 1 ]; then
+    C_TITLE=$'\033[1;36m'
+    C_RESET=$'\033[0m'
+  fi
+  cat <<EOF
+
+${C_TITLE}GHCM HUB-AGENTS${C_RESET}
+Multi-Agent Orchestrator
+
+EOF
+}
+
+banner() {
+  local cols
+  cols=$(tput cols 2>/dev/null || echo 80)
+  if [ "$cols" -lt 50 ]; then
+    banner_compact
+  else
+    banner_full
+  fi
+}
+
+# Valida dependências (tmux, git, CLIs configurados). Aborta se faltar
+# obrigatórias. Avisa sobre opcionais (gh) sem abortar.
+preflight() {
+  local missing=()
+  command -v tmux >/dev/null 2>&1 || missing+=("tmux")
+  command -v git  >/dev/null 2>&1 || missing+=("git")
+
+  local cmd_var cmd_val cli
+  for cmd_var in PLANNER_CMD DEVELOPER_CMD REVIEWER_CMD GIT_MANAGER_CMD; do
+    cmd_val="${!cmd_var}"
+    cli="${cmd_val%% *}"
+    if ! command -v "$cli" >/dev/null 2>&1; then
+      missing+=("$cli (configurado em $cmd_var)")
+    fi
   done
-  printf "\r  %s [%s] %3d%% - pronto                \n" \
-    "$label" "$(printf '%*s' "$cols" '' | tr ' ' '=')" 100
+
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "  Erro: dependências faltando:" >&2
+    printf "    - %s\n" "${missing[@]}" >&2
+    echo >&2
+    echo "  Instale e rode novamente. Veja config: ghcm config" >&2
+    exit 1
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "  Aviso: 'gh' não autenticado — git-manager vai falhar ao criar PR."
+    echo "         Resolva com: gh auth login"
+    echo
+  fi
+}
+
+# Marker de "TUI pronta" por CLI. Usa textos estáveis que aparecem sempre
+# que o CLI sobe nos modos não-interativos que configuramos.
+ready_marker_for() {
+  case "$1" in
+    claude) echo 'bypass permissions|Claude Code v|Welcome back' ;;
+    codex)  echo 'YOLO mode|OpenAI Codex|model:' ;;
+    gemini) echo 'Gemini|GEMINI.md' ;;
+    ollama) echo '>>>' ;;
+    *)      echo 'bypass permissions|YOLO mode|>>>|❯' ;;
+  esac
+}
+
+# Aguarda os panes ficarem prontos via heurística: capture-pane periódico
+# até ver um marker específico do CLI rodando em cada um. Mostra progresso
+# e desiste após timeout. Retorna 0 se todos prontos, 1 se timeout.
+# Args: lista de pares "pane_id:cli_name" (ex: "%1:claude").
+wait_for_ready() {
+  local entries=("$@")
+  local timeout=45
+  local cols=40
+  local total=${#entries[@]}
+  local i ready
+
+  for ((i=0; i<timeout; i++)); do
+    ready=0
+    for entry in "${entries[@]}"; do
+      local pane="${entry%%:*}"
+      local cli="${entry##*:}"
+      local marker
+      marker=$(ready_marker_for "$cli")
+      local content
+      content=$(tmux capture-pane -t "$pane" -p -S -200 2>/dev/null || echo "")
+      if echo "$content" | grep -qE "$marker"; then
+        ready=$((ready + 1))
+      fi
+    done
+
+    local filled=$((ready * cols / total))
+    local empty=$((cols - filled))
+    local bar
+    bar=$(printf '%*s' "$filled" '' | tr ' ' '=')
+    bar+=$(printf '%*s' "$empty" ''  | tr ' ' '-')
+    printf "\r  Aguardando CLIs [%s] %d/%d prontos  " "$bar" "$ready" "$total"
+
+    if [ "$ready" -eq "$total" ]; then
+      printf "\r  CLIs prontos    [%s] %d/%d - ok                       \n" \
+        "$(printf '%*s' "$cols" '' | tr ' ' '=')" "$total" "$total"
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  printf "\r  Aguardando CLIs [%s] timeout - atachando assim mesmo  \n" \
+    "$(printf '%*s' "$cols" '' | tr ' ' '?')"
+  return 1
+}
+
+# Roda 'claude /init' headless no projeto, mostrando tail do log em tempo real.
+# Retorna 0 se gerou CLAUDE.md, 1 caso contrário.
+run_init_with_tail() {
+  local project_dir=$1
+  local log_file=$2
+
+  : > "$log_file"
+
+  ( cd "$project_dir" && claude --dangerously-skip-permissions -p "/init" ) \
+    > "$log_file" 2>&1 &
+  local init_pid=$!
+
+  # Tail em background mostrando o log enquanto o init roda.
+  tail -f "$log_file" --pid="$init_pid" 2>/dev/null &
+  local tail_pid=$!
+
+  wait "$init_pid"
+  local rc=$?
+  kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
+
+  return $rc
 }
 
 # ---------- main ----------
@@ -71,33 +192,43 @@ PROJECT_DIR=$(cd "$PROJECT_DIR" 2>/dev/null && pwd) || {
 }
 
 if [ ! -d "$PROJECT_DIR/.git" ]; then
-  echo "Aviso: $PROJECT_DIR não é um repositório git."
-  read -r -p "Continuar mesmo assim? [y/N] " ans
+  echo "  Aviso: $PROJECT_DIR não é um repositório git."
+  read -r -p "  Continuar mesmo assim? [y/N] " ans
   [[ "$ans" =~ ^[yY] ]] || exit 1
 fi
 
 PROJECT_SLUG=$(basename "$PROJECT_DIR")
 STATE="$HUB/state/$PROJECT_SLUG"
+SESSION="agents-$PROJECT_SLUG"
 
 mkdir -p "$STATE/plans/pending" "$STATE/plans/done" \
          "$STATE/reviews/pending" \
          "$STATE/reviews/done/approved" \
          "$STATE/reviews/done/rejected" \
-         "$STATE/reviews/done/shipped"
+         "$STATE/reviews/done/shipped" \
+         "$LOGS"
 
 echo "$PROJECT_DIR" > "$HUB/current-project.txt"
+# Guarda o path absoluto do projeto pra esse slug, pra ghcm status saber
+# resolver o slug -> path mesmo quando o current-project é outro.
+echo "$PROJECT_DIR" > "$STATE/.project-path"
 
 printf "  %-14s %s\n" "Projeto:" "$PROJECT_DIR"
 printf "  %-14s %s\n" "Slug:"    "$PROJECT_SLUG"
+printf "  %-14s %s\n" "Sessão:"  "$SESSION"
 printf "  %-14s %s\n" "State:"   "$STATE"
 echo
 
-# Se o projeto não tem context file, roda /init pra mapear antes de subir os agentes.
+preflight
+
+# Se o projeto não tem context file, roda /init pra mapear antes de subir.
 if [ ! -f "$PROJECT_DIR/CLAUDE.md" ] && [ ! -f "$PROJECT_DIR/AGENTS.md" ]; then
-  echo "  Projeto sem CLAUDE.md/AGENTS.md — rodando /init pra mapear o projeto."
-  echo "  (pode levar 1-3 min; log: /tmp/agent-hub-init.log)"
-  if ( cd "$PROJECT_DIR" && claude --dangerously-skip-permissions -p "/init" ) \
-       > /tmp/agent-hub-init.log 2>&1; then
+  init_log="$LOGS/$(date +%Y%m%d-%H%M%S)-init-${PROJECT_SLUG}.log"
+  echo "  Projeto sem CLAUDE.md/AGENTS.md — rodando /init pra mapear."
+  echo "  Log: $init_log"
+  echo "  --- saída do /init ---"
+  if run_init_with_tail "$PROJECT_DIR" "$init_log"; then
+    echo "  --- fim do /init ---"
     if [ -f "$PROJECT_DIR/CLAUDE.md" ]; then
       echo "  OK: CLAUDE.md gerado."
       if [ ! -e "$PROJECT_DIR/AGENTS.md" ]; then
@@ -105,21 +236,22 @@ if [ ! -f "$PROJECT_DIR/CLAUDE.md" ] && [ ! -f "$PROJECT_DIR/AGENTS.md" ]; then
         echo "  OK: AGENTS.md criado (cópia de CLAUDE.md, pro codex/reviewer)."
       fi
     else
-      echo "  AVISO: /init terminou sem criar CLAUDE.md. Veja /tmp/agent-hub-init.log"
+      echo "  Aviso: /init terminou sem criar CLAUDE.md."
     fi
   else
-    echo "  AVISO: /init falhou. Veja /tmp/agent-hub-init.log"
+    echo "  --- fim do /init (com erro) ---"
+    echo "  Aviso: /init falhou. Os agentes vão começar sem contexto autodescoberto."
   fi
   echo
 fi
 
-if tmux has-session -t $SESSION 2>/dev/null; then
-  echo "  Sessão tmux 'agents' já existe — anexando."
-  exec tmux attach -t $SESSION
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "  Sessão tmux '$SESSION' já existe — anexando."
+  exec tmux attach -t "$SESSION"
 fi
 
 # Captura pane IDs estáveis (%X) na criação. Não dependem de select-layout.
-PLANNER=$(tmux new-session -d -s $SESSION -x 240 -y 60 \
+PLANNER=$(tmux new-session -d -s "$SESSION" -x 240 -y 60 \
   -c "$AGENTS/planner" -P -F '#{pane_id}')
 
 DEVELOPER=$(tmux split-window -h -t "$PLANNER" \
@@ -131,13 +263,18 @@ REVIEWER=$(tmux split-window -v -t "$PLANNER" \
 GIT_MANAGER=$(tmux split-window -v -t "$DEVELOPER" \
   -c "$AGENTS/git-manager" -P -F '#{pane_id}')
 
-tmux select-layout -t $SESSION:0 tiled
+tmux select-layout -t "$SESSION:0" tiled
 # Interface limpa: sem status bar inferior, com título no topo de cada pane.
-tmux set -t $SESSION -g status off
-tmux set -t $SESSION -g pane-border-status top
+tmux set -t "$SESSION" -g status off
+tmux set -t "$SESSION" -g pane-border-status top
 # Usa variável user-defined @role_label (resistente a sobrescritas que
 # claude/codex fazem em pane_title via escape sequences).
-tmux set -t $SESSION -g pane-border-format " #{@role_label} "
+tmux set -t "$SESSION" -g pane-border-format " #{@role_label} "
+# Notificação visual: pisca o pane border quando fica silencioso por 5s
+# (agente terminou de responder).
+tmux set -t "$SESSION" -g visual-silence on
+tmux set -t "$SESSION" -g visual-bell off
+tmux set -t "$SESSION" -g bell-action none
 
 tmux set -t "$PLANNER"     -p @role_label "PLANNER [${PLANNER_CMD%% *}]"
 tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER [${DEVELOPER_CMD%% *}]"
@@ -156,12 +293,25 @@ printf "    %-12s -> %s\n" "REVIEWER"    "$REVIEWER_CMD"
 printf "    %-12s -> %s\n" "GIT-MANAGER" "$GIT_MANAGER_CMD"
 echo
 
-progress_bar 10 "Aguardando inicialização"
+# O `|| true` é crítico: wait_for_ready retorna 1 em timeout, e com `set -e`
+# isso abortaria o script ANTES do `exec tmux attach` no final, deixando a
+# sessão tmux rodando detached e o usuário sem feedback no terminal.
+wait_for_ready \
+  "$PLANNER:${PLANNER_CMD%% *}" \
+  "$DEVELOPER:${DEVELOPER_CMD%% *}" \
+  "$REVIEWER:${REVIEWER_CMD%% *}" \
+  "$GIT_MANAGER:${GIT_MANAGER_CMD%% *}" || true
+
+# Ativa monitor-silence DEPOIS dos CLIs estarem rodando, pra que o silêncio
+# inicial (subida) não dispare alerta. 5s de silêncio = agente parou.
+for pane in "$PLANNER" "$DEVELOPER" "$REVIEWER" "$GIT_MANAGER"; do
+  tmux set-option -t "$pane" -p monitor-silence 5 || true
+done
 
 echo
 echo "  Fluxo: PLANNER → aprova → DEVELOPER → REVIEWER → GIT-MANAGER"
-echo "  Ctrl-b d  desanexar  (volta com: tmux attach -t agents)"
+echo "  Ctrl-b d  desanexar  (volta com: tmux attach -t $SESSION)"
 echo
 
 sleep 1
-exec tmux attach -t $SESSION
+exec tmux attach -t "$SESSION"

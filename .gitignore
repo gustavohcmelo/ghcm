@@ -1,5 +1,6 @@
 # Runtime — não versionar
 state/
+logs/
 current-project.txt
 
 # Config customizada do usuário (template versionado: config.example.sh)
