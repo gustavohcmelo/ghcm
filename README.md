@@ -91,7 +91,11 @@ Dentro do tmux:
 | bottom-left | reviewer | "verifique reviews pendentes" |
 | bottom-right | git-manager | "envie aprovados" |
 
-Cada projeto tem sua **própria sessão tmux** (`agents-<slug>`), então você pode ter vários projetos abertos ao mesmo tempo sem conflito. `Ctrl-b d` desanexa sem matar (`ghcm attach` pra voltar).
+Cada projeto tem sua **própria sessão tmux** (`agents-<slug>`), então você pode ter vários projetos abertos ao mesmo tempo sem conflito. Atalhos úteis dentro do tmux:
+
+- `Ctrl-b d` — desanexa sem matar (volte com `ghcm attach`)
+- `Ctrl-b X` — encerra a sessão (com confirmação)
+- `Ctrl-b s` — alterna entre sessões abertas (seguro: agentes derivam o slug do nome da sessão atual)
 
 Quando um agente termina de responder e fica 5s silencioso, o tmux pisca o border do pane (sinal visual de "pronto pra próxima"). Configurável via `monitor-silence` na sessão.
 

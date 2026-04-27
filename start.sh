@@ -276,6 +276,10 @@ tmux set -t "$SESSION" -g visual-silence on
 tmux set -t "$SESSION" -g visual-bell off
 tmux set -t "$SESSION" -g bell-action none
 
+# Atalho pra encerrar a sessão sem precisar de `:kill-session`.
+# Ctrl-b X com confirmação interativa.
+tmux bind-key -T prefix X confirm-before -p "Encerrar sessão #S? (y/n)" kill-session
+
 tmux set -t "$PLANNER"     -p @role_label "PLANNER [${PLANNER_CMD%% *}]"
 tmux set -t "$DEVELOPER"   -p @role_label "DEVELOPER [${DEVELOPER_CMD%% *}]"
 tmux set -t "$REVIEWER"    -p @role_label "REVIEWER [${REVIEWER_CMD%% *}]"
@@ -310,7 +314,8 @@ done
 
 echo
 echo "  Fluxo: PLANNER → aprova → DEVELOPER → REVIEWER → GIT-MANAGER"
-echo "  Ctrl-b d  desanexar  (volta com: tmux attach -t $SESSION)"
+echo "  Ctrl-b d  desanexar  (volta com: ghcm attach $PROJECT_SLUG)"
+echo "  Ctrl-b X  encerrar a sessão (com confirmação)"
 echo
 
 sleep 1
