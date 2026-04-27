@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# ghcm — entrypoint do GHCM HUB-AGENTS.
+# Subcomandos: start, config, stop, help
+
+set -e
+
+HUB="$HOME/agent-hub"
+SESSION=agents
+
+usage() {
+  cat <<'EOF'
+ghcm — GHCM HUB-AGENTS
+
+Uso:
+  ghcm start [project_dir]   Inicia a sessão tmux com os 4 agentes (default: cwd atual)
+  ghcm config                Abre ~/agent-hub/config.sh no editor
+  ghcm stop                  Encerra a sessão tmux 'agents'
+  ghcm help                  Mostra esta ajuda
+
+Arquivos:
+  ~/agent-hub/config.sh           comandos por role
+  ~/agent-hub/current-project.txt projeto ativo
+  ~/agent-hub/state/<slug>/       planos e reviews por projeto
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  start)
+    exec "$HUB/start.sh" "$@"
+    ;;
+
+  config)
+    if [ ! -f "$HUB/config.sh" ] && [ -f "$HUB/config.example.sh" ]; then
+      cp "$HUB/config.example.sh" "$HUB/config.sh"
+      echo "Criado $HUB/config.sh a partir do template."
+    fi
+    editor="${EDITOR:-}"
+    if [ -z "$editor" ]; then
+      for cand in nano vim vi; do
+        if command -v "$cand" >/dev/null 2>&1; then
+          editor="$cand"
+          break
+        fi
+      done
+    fi
+    if [ -z "$editor" ]; then
+      echo "Erro: nenhum editor encontrado. Defina \$EDITOR." >&2
+      exit 1
+    fi
+    exec "$editor" "$HUB/config.sh"
+    ;;
+
+  stop)
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+      tmux kill-session -t "$SESSION"
+      echo "Sessão tmux '$SESSION' encerrada."
+    else
+      echo "Nenhuma sessão tmux '$SESSION' rodando."
+    fi
+    ;;
+
+  help|-h|--help)
+    usage
+    ;;
+
+  *)
+    echo "Subcomando desconhecido: $cmd" >&2
+    echo
+    usage
+    exit 1
+    ;;
+esac

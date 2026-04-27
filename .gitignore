@@ -1,0 +1,10 @@
+# Runtime — não versionar
+state/
+current-project.txt
+
+# Config customizada do usuário (template versionado: config.example.sh)
+config.sh
+
+# Editor / OS
+*.swp
+.DS_Store
