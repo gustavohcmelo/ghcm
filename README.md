@@ -7,10 +7,10 @@
 
      H U B  -  A G E N T S
      ------------------------
-     Multi-Agent Orchestrator
+     Gated Hub CLI Manager
 ```
 
-Orquestrador multi-agente em terminal. Quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios. Os arquivos de controle ficam fora do projeto, em `~/agent-hub/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
+**GHCM** = **G**ated **H**ub **C**LI **M**anager. Orquestrador multi-agente em terminal: quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios — daí o "Gated". Os arquivos de controle ficam fora do projeto, em `~/agent-hub/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
 
 ![Sessão tmux com os 4 agentes](docs/screenshots/panes.png)
 

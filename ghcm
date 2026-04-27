@@ -10,7 +10,7 @@ SESSION_PREFIX="agents-"
 
 usage() {
   cat <<'EOF'
-ghcm — GHCM HUB-AGENTS
+ghcm — GHCM (Gated Hub CLI Manager)
 
 Uso:
   ghcm start [project_dir]      Inicia sessão tmux com 4 agentes (default: cwd atual)
