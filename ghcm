@@ -1,38 +1,292 @@
 #!/usr/bin/env bash
 # ghcm — entrypoint do GHCM HUB-AGENTS.
-# Subcomandos: start, config, stop, help
+# Subcomandos: start, stop, status, list, config, logs, help
 
 set -e
 
 HUB="$HOME/agent-hub"
-SESSION=agents
+LOGS="$HUB/logs"
+SESSION_PREFIX="agents-"
 
 usage() {
   cat <<'EOF'
 ghcm — GHCM HUB-AGENTS
 
 Uso:
-  ghcm start [project_dir]   Inicia a sessão tmux com os 4 agentes (default: cwd atual)
-  ghcm config                Abre ~/agent-hub/config.sh no editor
-  ghcm stop                  Encerra a sessão tmux 'agents'
-  ghcm help                  Mostra esta ajuda
+  ghcm start [project_dir]      Inicia sessão tmux com 4 agentes (default: cwd atual)
+  ghcm attach [slug]            Reconecta na sessão tmux (default: do cwd)
+  ghcm switch [slug]            Alterna entre sessões (interativo se &gt;1; aceita slug)
+  ghcm stop [slug|--all]        Encerra sessão (default: do cwd; --all encerra todas)
+  ghcm status [slug]            Mostra planos/reviews do projeto (default: current-project)
+  ghcm list                     Lista sessões tmux ativas
+  ghcm config [--reset]         Edita config.sh (--reset restaura do template)
+  ghcm logs [name]              Lista logs / mostra um log específico
+  ghcm help                     Mostra esta ajuda
 
 Arquivos:
-  ~/agent-hub/config.sh           comandos por role
-  ~/agent-hub/current-project.txt projeto ativo
-  ~/agent-hub/state/<slug>/       planos e reviews por projeto
+  ~/agent-hub/config.sh             comandos por role
+  ~/agent-hub/current-project.txt   projeto ativo
+  ~/agent-hub/state/<slug>/         planos e reviews por projeto
+  ~/agent-hub/logs/                 logs históricos (timestamped)
 EOF
+}
+
+# Lê current-project.txt e devolve slug do projeto ativo. Vazio se não existe.
+current_slug() {
+  local path
+  path=$(cat "$HUB/current-project.txt" 2>/dev/null || echo "")
+  [ -n "$path" ] && basename "$path"
+}
+
+# Resolve slug a partir do arg ou cwd ou current-project.
+resolve_slug() {
+  local arg=$1
+  if [ -n "$arg" ]; then
+    echo "$arg"
+    return
+  fi
+  # Tenta inferir do cwd
+  if [ -d "$HUB/state/$(basename "$PWD")" ]; then
+    basename "$PWD"
+    return
+  fi
+  # Fallback: current-project
+  current_slug
+}
+
+# Conta arquivos .md em um diretório (sem recursão), 0 se vazio/inexistente.
+count_md() {
+  local dir=$1
+  [ -d "$dir" ] || { echo 0; return; }
+  find "$dir" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l
+}
+
+# Lista nomes (apenas filename) de arquivos .md em um diretório.
+list_md() {
+  local dir=$1
+  [ -d "$dir" ] || return
+  find "$dir" -maxdepth 1 -type f -name '*.md' 2>/dev/null \
+    -exec basename {} \; | sort
+}
+
+# Verifica se arquivo .md tem frontmatter YAML válido (--- na linha 1).
+has_frontmatter() {
+  local file=$1
+  [ -f "$file" ] || return 1
+  head -1 "$file" 2>/dev/null | grep -q '^---$'
+}
+
+# Atualiza current-project.txt pro slug correspondente, lendo de
+# state/<slug>/.project-path. Garante que os agentes daquela sessão
+# leem o caminho certo do projeto.
+set_current_project() {
+  local slug=$1
+  local pp="$HUB/state/$slug/.project-path"
+  if [ -f "$pp" ]; then
+    cat "$pp" > "$HUB/current-project.txt"
+  fi
 }
 
 cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
+
   start)
     exec "$HUB/start.sh" "$@"
     ;;
 
+  attach)
+    slug=$(resolve_slug "${1:-}")
+    if [ -z "$slug" ]; then
+      echo "Erro: nenhum slug informado e não foi possível inferir do cwd." >&2
+      echo "Uso: ghcm attach <slug>     (ou rode dentro do diretório do projeto)" >&2
+      exit 1
+    fi
+    session="${SESSION_PREFIX}${slug}"
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      echo "Sessão '$session' não está rodando."
+      echo "Inicie com: ghcm start"
+      exit 1
+    fi
+    set_current_project "$slug"
+    exec tmux attach -t "$session"
+    ;;
+
+  switch)
+    sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${SESSION_PREFIX}" || true)
+    if [ -z "$sessions" ]; then
+      echo "Nenhuma sessão '${SESSION_PREFIX}*' rodando. Inicie com: ghcm start"
+      exit 1
+    fi
+
+    target_slug="${1:-}"
+    if [ -z "$target_slug" ]; then
+      mapfile -t sess_arr <<< "$sessions"
+      count=${#sess_arr[@]}
+      if [ "$count" -eq 1 ]; then
+        target_slug="${sess_arr[0]#$SESSION_PREFIX}"
+      else
+        cur=$(current_slug)
+        echo "Sessões ativas:"
+        for i in "${!sess_arr[@]}"; do
+          local_slug="${sess_arr[$i]#$SESSION_PREFIX}"
+          marker=" "
+          [ "$local_slug" = "$cur" ] && marker="*"
+          printf "  %s %d) %s\n" "$marker" "$((i+1))" "${sess_arr[$i]}"
+        done
+        read -r -p "Escolha [1-$count]: " choice
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$count" ]; then
+          echo "Escolha inválida." >&2
+          exit 1
+        fi
+        target_slug="${sess_arr[$((choice-1))]#$SESSION_PREFIX}"
+      fi
+    fi
+
+    session="${SESSION_PREFIX}${target_slug}"
+    if ! tmux has-session -t "$session" 2>/dev/null; then
+      echo "Sessão '$session' não encontrada." >&2
+      exit 1
+    fi
+    set_current_project "$target_slug"
+
+    # Se já estamos dentro de um tmux, troca a sessão atual em vez de attach
+    # (que falha quando já há sessão attached).
+    if [ -n "${TMUX:-}" ]; then
+      exec tmux switch-client -t "$session"
+    fi
+    exec tmux attach -t "$session"
+    ;;
+
+  stop)
+    target=${1:-}
+    if [ "$target" = "--all" ]; then
+      sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${SESSION_PREFIX}" || true)
+      if [ -z "$sessions" ]; then
+        echo "Nenhuma sessão '${SESSION_PREFIX}*' rodando."
+        exit 0
+      fi
+      while IFS= read -r s; do
+        tmux kill-session -t "$s" && echo "Encerrada: $s"
+      done <<< "$sessions"
+      exit 0
+    fi
+
+    slug=$(resolve_slug "$target")
+    if [ -z "$slug" ]; then
+      echo "Erro: nenhum slug informado e não foi possível inferir. Uso: ghcm stop <slug>" >&2
+      exit 1
+    fi
+    session="${SESSION_PREFIX}${slug}"
+    if tmux has-session -t "$session" 2>/dev/null; then
+      tmux kill-session -t "$session"
+      echo "Sessão '$session' encerrada."
+    else
+      echo "Nenhuma sessão '$session' rodando."
+    fi
+    ;;
+
+  status)
+    slug=$(resolve_slug "${1:-}")
+    if [ -z "$slug" ]; then
+      echo "Erro: sem projeto ativo. Rode 'ghcm start' primeiro ou passe um slug." >&2
+      exit 1
+    fi
+
+    state="$HUB/state/$slug"
+    if [ ! -d "$state" ]; then
+      echo "Projeto '$slug' não tem state em $state." >&2
+      exit 1
+    fi
+
+    # Resolve o path absoluto pra esse slug específico:
+    # 1º preferência: state/<slug>/.project-path (escrito pelo start.sh)
+    # 2º fallback: current-project.txt (só faz sentido se for o projeto atual)
+    if [ -f "$state/.project-path" ]; then
+      project_path=$(cat "$state/.project-path")
+    elif [ "$slug" = "$(current_slug)" ]; then
+      project_path=$(cat "$HUB/current-project.txt" 2>/dev/null || echo "(desconhecido)")
+    else
+      project_path="(desconhecido — abra o projeto com 'ghcm start' pra registrar)"
+    fi
+    session="${SESSION_PREFIX}${slug}"
+    if tmux has-session -t "$session" 2>/dev/null; then
+      session_status="ativa"
+    else
+      session_status="inativa"
+    fi
+
+    echo "Projeto:     $project_path"
+    echo "Slug:        $slug"
+    echo "Sessão tmux: $session ($session_status)"
+    echo
+
+    plans_pending=$(count_md "$state/plans/pending")
+    plans_done=$(count_md "$state/plans/done")
+    rev_pending=$(count_md "$state/reviews/pending")
+    rev_approved=$(count_md "$state/reviews/done/approved")
+    rev_rejected=$(count_md "$state/reviews/done/rejected")
+    rev_shipped=$(count_md "$state/reviews/done/shipped")
+
+    echo "Plans:"
+    echo "  pending: $plans_pending"
+    list_md "$state/plans/pending" | sed 's/^/    /'
+    echo "  done:    $plans_done"
+    echo
+
+    echo "Reviews:"
+    echo "  pending:  $rev_pending"
+    list_md "$state/reviews/pending" | sed 's/^/    /'
+    echo "  approved: $rev_approved"
+    list_md "$state/reviews/done/approved" | sed 's/^/    /'
+    echo "  rejected: $rev_rejected"
+    list_md "$state/reviews/done/rejected" | sed 's/^/    /'
+    echo "  shipped:  $rev_shipped"
+    echo
+
+    # Validação leve: warning pra arquivos sem frontmatter.
+    missing_fm=()
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      has_frontmatter "$f" || missing_fm+=("$f")
+    done < <(find "$state/plans" "$state/reviews" -type f -name '*.md' 2>/dev/null)
+
+    if [ ${#missing_fm[@]} -gt 0 ]; then
+      echo "Aviso: ${#missing_fm[@]} arquivo(s) sem frontmatter YAML (legados):"
+      for f in "${missing_fm[@]}"; do
+        echo "  - ${f#$HUB/}"
+      done
+    fi
+    ;;
+
+  list)
+    sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^${SESSION_PREFIX}" || true)
+    if [ -z "$sessions" ]; then
+      echo "Nenhuma sessão ativa. Inicie com: ghcm start"
+      exit 0
+    fi
+    echo "Sessões ativas:"
+    while IFS= read -r s; do
+      echo "  ${s#$SESSION_PREFIX}"
+    done <<< "$sessions"
+    ;;
+
   config)
+    if [ "${1:-}" = "--reset" ]; then
+      if [ ! -f "$HUB/config.example.sh" ]; then
+        echo "Erro: $HUB/config.example.sh não existe — não tem como resetar." >&2
+        exit 1
+      fi
+      if [ -f "$HUB/config.sh" ]; then
+        read -r -p "Sobrescrever $HUB/config.sh com o template? [y/N] " ans
+        [[ "$ans" =~ ^[yY] ]] || { echo "Cancelado."; exit 0; }
+      fi
+      cp "$HUB/config.example.sh" "$HUB/config.sh"
+      echo "OK: $HUB/config.sh restaurado do template."
+      exit 0
+    fi
+
     if [ ! -f "$HUB/config.sh" ] && [ -f "$HUB/config.example.sh" ]; then
       cp "$HUB/config.example.sh" "$HUB/config.sh"
       echo "Criado $HUB/config.sh a partir do template."
@@ -53,12 +307,26 @@ case "$cmd" in
     exec "$editor" "$HUB/config.sh"
     ;;
 
-  stop)
-    if tmux has-session -t "$SESSION" 2>/dev/null; then
-      tmux kill-session -t "$SESSION"
-      echo "Sessão tmux '$SESSION' encerrada."
+  logs)
+    target=${1:-}
+    mkdir -p "$LOGS"
+    if [ -n "$target" ]; then
+      log_file="$LOGS/$target"
+      if [ ! -f "$log_file" ]; then
+        echo "Erro: log '$target' não encontrado em $LOGS." >&2
+        exit 1
+      fi
+      exec less "$log_file"
+    fi
+
+    # Sem arg: lista logs em ordem cronológica decrescente.
+    echo "Logs em $LOGS/:"
+    if [ -z "$(ls -A "$LOGS" 2>/dev/null)" ]; then
+      echo "  (nenhum log)"
     else
-      echo "Nenhuma sessão tmux '$SESSION' rodando."
+      ls -1t "$LOGS" 2>/dev/null | sed 's/^/  /'
+      echo
+      echo "Pra ver um log: ghcm logs <nome>"
     fi
     ;;
 
