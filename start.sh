@@ -157,27 +157,35 @@ wait_for_ready() {
   return 1
 }
 
-# Roda 'claude /init' headless no projeto, mostrando tail do log em tempo real.
-# Retorna 0 se gerou CLAUDE.md, 1 caso contrário.
+# Roda 'claude /init' headless no projeto, mostrando só um timer em segundos
+# (atualizado in-place) pra confirmar que está vivo. A saída completa do
+# claude vai pro $log_file pra inspeção posterior em caso de falha.
 run_init_with_tail() {
   local project_dir=$1
   local log_file=$2
 
   : > "$log_file"
+  local start
+  start=$(date +%s)
 
   ( cd "$project_dir" && claude --dangerously-skip-permissions -p "/init" ) \
     > "$log_file" 2>&1 &
   local init_pid=$!
 
-  # Tail em background mostrando o log enquanto o init roda.
-  tail -f "$log_file" --pid="$init_pid" 2>/dev/null &
-  local tail_pid=$!
+  while kill -0 "$init_pid" 2>/dev/null; do
+    local elapsed=$(($(date +%s) - start))
+    printf "\r  Criando arquivos de contexto... %ds" "$elapsed"
+    sleep 1
+  done
 
   wait "$init_pid"
   local rc=$?
-  kill "$tail_pid" 2>/dev/null || true
-  wait "$tail_pid" 2>/dev/null || true
-
+  local elapsed=$(($(date +%s) - start))
+  if [ "$rc" -eq 0 ]; then
+    printf "\r  Criando arquivos de contexto... %ds ✓\n" "$elapsed"
+  else
+    printf "\r  Criando arquivos de contexto... %ds (falhou)\n" "$elapsed"
+  fi
   return $rc
 }
 
@@ -223,25 +231,16 @@ echo
 preflight
 
 # Se o projeto não tem context file, roda /init pra mapear antes de subir.
+echo "  Verificando arquivos de contexto (CLAUDE.md, AGENTS.md)..."
 if [ ! -f "$PROJECT_DIR/CLAUDE.md" ] && [ ! -f "$PROJECT_DIR/AGENTS.md" ]; then
+  echo "  Não encontrados — vou criar."
   init_log="$LOGS/$(date +%Y%m%d-%H%M%S)-init-${PROJECT_SLUG}.log"
-  echo "  Projeto sem CLAUDE.md/AGENTS.md — rodando /init pra mapear."
-  echo "  Log: $init_log"
-  echo "  --- saída do /init ---"
   if run_init_with_tail "$PROJECT_DIR" "$init_log"; then
-    echo "  --- fim do /init ---"
-    if [ -f "$PROJECT_DIR/CLAUDE.md" ]; then
-      echo "  OK: CLAUDE.md gerado."
-      if [ ! -e "$PROJECT_DIR/AGENTS.md" ]; then
-        cp "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/AGENTS.md"
-        echo "  OK: AGENTS.md criado (cópia de CLAUDE.md, pro codex/reviewer)."
-      fi
-    else
-      echo "  Aviso: /init terminou sem criar CLAUDE.md."
+    if [ -f "$PROJECT_DIR/CLAUDE.md" ] && [ ! -e "$PROJECT_DIR/AGENTS.md" ]; then
+      cp "$PROJECT_DIR/CLAUDE.md" "$PROJECT_DIR/AGENTS.md"
     fi
   else
-    echo "  --- fim do /init (com erro) ---"
-    echo "  Aviso: /init falhou. Os agentes vão começar sem contexto autodescoberto."
+    echo "  Log: $init_log"
   fi
   echo
 fi
