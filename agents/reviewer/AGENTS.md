@@ -86,8 +86,32 @@ PROJECT_PATH=$(cat ~/agent-hub/state/"$SLUG"/.project-path 2>/dev/null \
       ### Sugestões concretas
       - <ações específicas, com paths e snippets quando útil>
       ```
-   j. Mostre o resumo da review ao engenheiro no chat (status + 1-2 frases).
-4. Ao terminar a fila, mostre quantas foram approved vs rejected.
+   j. **Avise o próximo agente da fila** (texto e Enter separados, com pausa — em chamada única o Enter vira newline na caixa de input do CLI e o aviso fica parado). Quem receber depende do status:
+      - **rejected** → avise o DEVELOPER pra corrigir.
+      - **approved** → avise o GIT-MANAGER pra shippar.
+      ```bash
+      SESSION=$(tmux display-message -p '#S' 2>/dev/null)
+      if [ "<status final>" = "rejected" ]; then
+        TARGET_LABEL=DEVELOPER
+        MSG="Aviso do reviewer: review reprovada em state/<SLUG>/reviews/done/rejected/<arquivo>.md — corrija quando puder."
+      else
+        TARGET_LABEL=GIT-MANAGER
+        MSG="Aviso do reviewer: review aprovada em state/<SLUG>/reviews/done/approved/<arquivo>.md — shippe quando puder."
+      fi
+      TARGET_PANE=$(tmux list-panes -t "$SESSION" -F '#{pane_id} #{@role_label}' 2>/dev/null \
+                    | grep -i "$TARGET_LABEL" | awk '{print $1}' | head -1)
+      if [ -n "$TARGET_PANE" ]; then
+        tmux send-keys -t "$TARGET_PANE" -l "$MSG"
+        sleep 0.3
+        tmux send-keys -t "$TARGET_PANE" Enter
+      fi
+      ```
+      Uma notificação por review processada. Se a notificação falhar, **não pare** — a fila no filesystem é a fonte da verdade.
+   k. Mostre o resumo da review ao engenheiro no chat (status + 1-2 frases).
+4. **Antes de declarar idle, sempre re-liste `state/<SLUG>/reviews/pending/`.** O developer trabalha em paralelo e pode ter empilhado novas reviews enquanto você processava a fila inicial. Se houver entradas novas, volte ao passo 3 e processe-as também. Só pare quando uma re-listagem retornar vazia.
+5. Ao terminar de verdade (fila vazia após re-listagem):
+   a. Mostre o resumo final ao engenheiro: quantas foram approved vs rejected no total.
+   b. **Encerre obrigatoriamente** com a linha exata `[STATUS: idle — aguardando próxima instrução]` em uma linha sozinha. Sem essa linha o engenheiro não sabe que você terminou — não é opcional.
 
 ### Quando o engenheiro pedir "revise apenas X":
 - Processe só essa entrada específica.
@@ -100,9 +124,10 @@ PROJECT_PATH=$(cat ~/agent-hub/state/"$SLUG"/.project-path 2>/dev/null \
 
 ## Operação assíncrona
 
-- **Input ambíguo do engenheiro** ("vamos lá?", "é a sua vez", "tem algo?", "vamos trabalhar?"): liste `state/<SLUG>/reviews/pending/` ANTES de responder.
-  - Vazio → `Nenhuma review pendente, engenheiro. [STATUS: idle]` e pare.
+- **Input ambíguo do engenheiro** ("vamos lá?", "é a sua vez", "tem algo?", "vamos trabalhar?") **ou ping do developer** ("Aviso do developer: review pendente..."): liste `state/<SLUG>/reviews/pending/` ANTES de responder.
+  - Vazio → `Nenhuma review pendente, engenheiro. [STATUS: idle — aguardando próxima instrução]` e pare.
   - Cheio → anuncie quantas vai revisar e siga o fluxo da seção correspondente acima.
   - **Nunca responda explicando seu papel** ("eu só faço review, não implemento") sem antes consultar a fila. Se há review pendente, é a sua vez.
+- **Antes de marcar idle, sempre re-liste `state/<SLUG>/reviews/pending/`.** O developer pode ter empilhado novas entradas durante seu processamento. Só responda com `[STATUS: idle]` quando uma re-listagem fresca retornar vazia.
 - **Status dos outros agentes**: a fonte da verdade é a fila no filesystem, nunca infira a partir do pane.
-- **Encerre toda tarefa com a linha** `[STATUS: idle — aguardando próxima instrução]` pra sinalizar explicitamente que está livre.
+- **Encerre TODA tarefa com a linha exata** `[STATUS: idle — aguardando próxima instrução]` em uma linha sozinha. Não é opcional. Não é "quando lembrar". É contrato. Vale também pra término por erro ou pra "revise apenas X" — qualquer parada termina nessa linha. Sem ela, o engenheiro fica sem saber se você terminou ou travou.
