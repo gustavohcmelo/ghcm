@@ -82,4 +82,4 @@ Each role's behavior is defined entirely by its prompt file. Treat these as prod
 
 ## CLI requirements
 
-The four roles are configured via `~/agent-hub/config.sh` (initialized from `config.example.sh` on first run). CLIs that need tool use (developer, git-manager, reviewer) must be `claude`, `codex`, or `gemini`. `ollama` works only for planner (text-only, no tool use).
+The four roles are configured via `~/agent-hub/config.sh` (initialized from `config.example.sh` on first run). CLIs that need tool use (developer, git-manager, reviewer) must be `claude`, `codex`, `gemini`, or `qwen` (qwen-code is a fork of gemini-cli with the same tool-use surface; provider configured in `~/.qwen/settings.json`). `ollama` works only for planner (text-only, no tool use).

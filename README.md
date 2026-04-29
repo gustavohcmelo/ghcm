@@ -53,6 +53,7 @@ Reviews reprovadas viram correções versionadas (`-v2`, `-v3`...) — o develop
   - [`claude`](https://docs.claude.com/en/docs/claude-code/quickstart) (Anthropic Claude Code)
   - [`codex`](https://github.com/openai/codex) (OpenAI Codex)
   - [`gemini`](https://github.com/google-gemini/gemini-cli) (Google Gemini, opcional)
+  - [`qwen`](https://github.com/QwenLM/qwen-code) (qwen-code, fork do gemini-cli; provider em `~/.qwen/settings.json`)
 - `gh` (GitHub CLI), autenticado, **se for usar o git-manager pra abrir PRs**
 
 ## Instalação
@@ -121,10 +122,10 @@ ghcm switch                     # menu interativo se houver >1 sessão
 Quando um plano precisa de aval externo (gestor, cliente) antes de virar tarefa do developer, dá pra exportar como PDF formatado:
 
 ```bash
-ghcm plans                                         # lista planos do projeto atual
-ghcm plans app-web --pending                  # só pendentes do projeto X
-ghcm plans app-web export installments-preview # gera PDF (id parcial OK)
-# -> /home/gustavo/agent-hub/state/app-web/exports/<id>.pdf
+ghcm plans                                       # lista planos do projeto atual
+ghcm plans meu-projeto --pending                 # só pendentes do projeto X
+ghcm plans meu-projeto export login-magic-link   # gera PDF (id parcial OK)
+# -> ~/agent-hub/state/meu-projeto/exports/<id>.pdf
 ```
 
 O comando ecoa só o path no stdout — fácil capturar (`pdf=$(ghcm plans ... export ...)`) ou abrir direto (`xdg-open "$(ghcm plans ... export ...)"`). Se o id casar com mais de um plano, mostra os candidatos pra refinar.

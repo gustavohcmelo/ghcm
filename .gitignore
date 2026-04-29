@@ -10,5 +10,5 @@ config.sh
 *.swp
 .DS_Store
 
-# Blueprint
-docs
+# Blueprint local (design notes não versionadas)
+docs/design/
