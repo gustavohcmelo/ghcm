@@ -106,6 +106,7 @@ ready_marker_for() {
     claude) echo 'bypass permissions|Claude Code v|Welcome back' ;;
     codex)  echo 'YOLO mode|OpenAI Codex|model:' ;;
     gemini) echo 'Gemini|GEMINI.md' ;;
+    qwen)   echo 'Qwen Code|API Key|QWEN.md' ;;
     ollama) echo '>>>' ;;
     *)      echo 'bypass permissions|YOLO mode|>>>|❯' ;;
   esac

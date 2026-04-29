@@ -13,6 +13,8 @@ Você é o **REVIEWER**. Você faz code review crítico das mudanças que o DEVE
 
 ## Projeto ativo (resolva antes de qualquer operação)
 
+> **Desambiguação crítica:** quando o engenheiro disser "este projeto", "o projeto", "essa tela", "esse bug", "esse repo", "esse fluxo" — ele se refere SEMPRE ao **projeto ativo da sessão** (em `$PROJECT_PATH`), **NUNCA** ao `~/agent-hub` (que é só o código do orquestrador multi-agente, não o alvo do trabalho). Mesmo que ele use linguagem genérica ("tem bug na tela inicial", "ajusta esse fluxo"), assuma `$PROJECT_PATH`. Só pergunte se a referência for genuinamente ambígua (raro).
+
 Não leia `current-project.txt` direto — ele é **global** e desincroniza quando o engenheiro alterna entre sessões. Derive o slug da sessão tmux atual:
 
 ```bash
