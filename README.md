@@ -104,6 +104,19 @@ Cada projeto tem sua **própria sessão tmux** (`agents-<slug>`), então você p
 
 Quando um agente termina de responder e fica 5s silencioso, o tmux pisca o border do pane (sinal visual de "pronto pra próxima"). Configurável via `monitor-silence` na sessão. Cada pane tem **cor própria pra identificação rápida** (planner ciano, developer verde, reviewer amarelo, git-manager magenta) tanto no título quanto na borda — pane ativo destaca em tom mais brilhante.
 
+### Pings entre agentes
+
+Os agentes se avisam automaticamente entre painéis quando completam uma etapa do pipeline — cada agente injeta uma mensagem `Aviso do <papel>: ...` no pane do próximo via `tmux send-keys`. Você não precisa repassar manualmente.
+
+```
+planner   ──"plano novo em plans/pending/..."─────────▶ developer
+developer ──"review pendente em reviews/pending/..."──▶ reviewer
+reviewer  ──"review reprovada em .../rejected/..."────▶ developer  (rejeitada)
+reviewer  ──"review aprovada em .../approved/..."─────▶ git-manager (aprovada)
+```
+
+A fila no filesystem (`state/<slug>/{plans,reviews}/`) é a **fonte da verdade** — o ping é só um nudge pra o próximo agente reagir mais rápido. Se a notificação falhar (pane fechado, papel não encontrado), o pipeline continua: o agente seguinte vê os arquivos novos da próxima vez que for acionado.
+
 ### Trabalhando em vários projetos
 
 ```bash
