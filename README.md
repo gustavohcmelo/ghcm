@@ -83,8 +83,6 @@ ghcm clean <slug> [--yes]   # apaga state/<slug>/ (sessão precisa estar parada)
 ghcm help                   # ajuda
 ```
 
-![Tela inicial do ghcm start](docs/screenshots/boot.png)
-
 Dentro do tmux:
 
 | Painel | Papel | Você fala |
