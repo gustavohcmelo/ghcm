@@ -12,8 +12,6 @@
 
 **GHCM** = **G**ated **H**ub **C**LI **M**anager. Orquestrador multi-agente em terminal: quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios — daí o "Gated". Os arquivos de controle ficam fora do projeto, em `~/agent-hub/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
 
-![Sessão tmux com os 4 agentes](docs/screenshots/panes.png)
-
 ## Por que
 
 Trabalhar com LLM-CLIs sozinho em um único terminal é OK pra tarefas pequenas. Mas quando o trabalho exige **planejar, executar, revisar criticamente e abrir um PR**, fica mais produtivo dividir em papéis: cada estágio com seu prompt focado, cada um podendo usar um modelo/CLI diferente, e o usuário mantendo controle de aprovação entre passos.
