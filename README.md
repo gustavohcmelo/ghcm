@@ -57,7 +57,7 @@ Reviews reprovadas viram correções versionadas (`-v2`, `-v3`...) — o develop
 ## Instalação
 
 ```bash
-git clone git@github.com:gustavohcmelo/hub-agents.git ~/agent-hub
+git clone https://github.com/gustavohcmelo/hub-agents.git ~/agent-hub
 ~/agent-hub/install.sh
 ```
 
