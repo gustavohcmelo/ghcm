@@ -42,7 +42,9 @@ Faça `cd "$PROJECT_PATH"` antes de rodar comandos. Todas as alterações de có
 
 1. Liste `state/<SLUG>/plans/pending/` ordenado por nome.
 2. Se vazio: "Nenhum plano pendente." e pare.
-3. Para cada plano em ordem:
+3. **Pegue o PRIMEIRO plano da fila e execute apenas ele neste turno.** Você processa **um plano por turno**, não a fila inteira em loop. Motivo: ao terminar um plano o working tree do projeto fica sujo (mudanças não commitadas), e o próximo plano só pode rodar com o tree limpo — caso contrário as mudanças se misturam num PR só. O git-manager limpa o tree depois (commit + push + PR) e te dá um ping pra retomar a fila. Se houver mais planos pendentes além do primeiro, anuncie ao engenheiro que existem N planos na fila e que você vai começar pelo primeiro; os demais entram na próxima rodada (depois do ping do git-manager).
+
+   Para o plano escolhido:
    a. Leia o conteúdo do arquivo de plano.
    b. Anuncie: "Executando: <nome do arquivo>"
    c. `cd` no diretório do projeto.
@@ -101,9 +103,9 @@ Faça `cd "$PROJECT_PATH"` antes de rodar comandos. Todas as alterações de có
 
         Faça isso uma vez por review criada (uma notificação por plano executado). Se a notificação falhar por qualquer motivo, **não pare a execução** — a fila no filesystem é a fonte da verdade e o reviewer eventualmente vê.
    f. Mostre breve resumo ao engenheiro.
-4. **Antes de declarar idle, sempre re-liste `state/<SLUG>/plans/pending/`** — o engenheiro ou outro processo pode ter empilhado planos novos enquanto você executava. Se a fila cresceu, volte ao passo 3. Só pare quando uma re-listagem fresca retornar vazia.
-5. Quando a fila esvaziar de verdade:
-   a. Mostre o resumo final ao engenheiro: quantos planos foram executados.
+4. **Encerre o turno aqui — um plano por turno.** Não volte ao passo 3 pra atacar o próximo plano da fila no mesmo turno: o working tree está sujo com as mudanças deste plano e rodar o próximo agora misturaria diffs num único PR. Se a fila tiver outros planos pendentes, mencione no resumo (ex: "executei plano X; ainda há N na fila — retomo após o git-manager shippar este") e marque idle. Quando o git-manager abrir o PR, ele te pinga (`Aviso do git-manager: PR aberto ... Working tree limpa — siga com a fila`); aí você re-lista `plans/pending/` e processa o próximo.
+5. Encerramento do turno:
+   a. Mostre o resumo ao engenheiro: qual plano foi executado, quantos ainda estão pendentes (se houver).
    b. **Encerre obrigatoriamente** com a linha exata `[STATUS: idle — aguardando próxima instrução]` em uma linha sozinha. Sem essa linha o engenheiro não sabe que você terminou — não é opcional.
 
 ### Se algum plano falhar:
@@ -187,7 +189,7 @@ A review reprovada anterior **fica em `rejected/`** como histórico — não mov
 
 ## Operação assíncrona
 
-- **Input ambíguo do engenheiro** ("vamos lá?", "sua vez", "tem algo?", "trabalha aí") **ou ping de outro agente** ("Aviso do planner: plano novo...", "Aviso do reviewer: review reprovada..."): liste sua fila ANTES de responder.
+- **Input ambíguo do engenheiro** ("vamos lá?", "sua vez", "tem algo?", "trabalha aí") **ou ping de outro agente** ("Aviso do planner: plano novo...", "Aviso do reviewer: review reprovada...", "Aviso do git-manager: PR aberto ... Working tree limpa — siga com a fila"): liste sua fila ANTES de responder. O ping do git-manager em particular é o sinal de retomada quando você parou em "1 plano por turno" — re-liste `plans/pending/` e ataque o próximo se houver.
   - Fila própria: `state/<SLUG>/plans/pending/` (planos novos) + `state/<SLUG>/reviews/done/rejected/` (correções pendentes).
   - Vazio → `Sem trabalho na fila, engenheiro. [STATUS: idle — aguardando próxima instrução]` e pare.
   - Cheio → anuncie o que vai processar e siga o fluxo da seção correspondente acima (execução de plano ou correção de rejeitada). Quando o ping menciona um arquivo específico, ainda assim **liste a fila inteira** — pode ter mais coisa empilhada que você nem viu.
