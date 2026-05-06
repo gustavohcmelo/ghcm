@@ -125,5 +125,3 @@ validado end-to-end em projeto real (PR aberto, revisado e mergeado).
 
 GHCM = **G**ated **H**ub **C**LI **M**anager. O "Gated" referencia os gates
 de aprovação manuais entre estágios — feature distintiva do projeto.
-
-[1.0.0]: https://github.com/gustavohcmelo/hub-agents/releases/tag/v1.0.0
