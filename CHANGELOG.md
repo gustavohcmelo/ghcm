@@ -5,6 +5,68 @@ Todas as mudanças relevantes deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 e o projeto segue [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [1.1.0] — 2026-05-06
+
+Iteração pós-1.0.0 com foco em comunicação assíncrona entre agentes,
+fila por sessão e robustez dos prompts. Pipeline mantém o mesmo
+formato; mudanças são em torno de UX, multi-CLI e regras de operação.
+
+### Adicionado
+
+#### CLI
+- `ghcm --version` (alias `version` / `-v`) imprime a versão do pacote.
+- `ghcm plans [slug] export <plan-id>` gera PDF do plano em
+  `state/<slug>/exports/`, com capa estruturada e tipografia
+  customizável via `templates/plan-pdf.css` e
+  `templates/plan-pdf-template.html`.
+- Atalho `Ctrl-b X` encerra a sessão tmux com confirmação.
+
+#### Multi-CLI
+- Suporte a `qwen` (qwen-code, fork do gemini-cli) como CLI
+  configurável em qualquer role; provider definido em
+  `~/.qwen/settings.json`. `wait_for_ready` reconhece o marker de
+  boot do qwen.
+
+#### Comunicação inter-agente
+- Pings automáticos entre painéis a cada transição do pipeline:
+  `planner → developer` (plano novo), `developer → reviewer`
+  (review pendente), `reviewer → developer` (rejeitada) ou
+  `git-manager` (aprovada), `git-manager → developer` (PR aberto,
+  working tree limpa). A fila no filesystem segue como fonte da
+  verdade; pings são nudge.
+- Developer processa **um plano por turno** e aguarda o ping do
+  git-manager pra retomar a fila — evita misturar diffs de múltiplos
+  planos num único PR.
+
+#### Robustez dos prompts
+- Bloco "Desambiguação crítica" em todos os roles: "este projeto"
+  sempre = `$PROJECT_PATH`, nunca `~/agent-hub`.
+- Regra "queue-first, não explora projeto" prominente no topo dos
+  prompts — agente lista a fila antes de qualquer leitura
+  exploratória.
+- Planner: regra explícita "não implementa, só planeja"; único
+  `Write` permitido é em `state/<slug>/plans/pending/`.
+- Git-manager: hard rule "tudo termina em PR" + proibição de PR
+  `homolog → main` (cada feature/fix abre PR isolado pra main).
+- Tarefas cross-repo geram **um único plano/review** no slug ativo
+  com seção "Repos envolvidos"; git-manager desdobra em N PRs no
+  ship.
+
+#### UX
+- Cor própria por pane (planner ciano, developer verde, reviewer
+  amarelo, git-manager magenta) — título e borda; pane ativo em
+  tom mais brilhante.
+- Timer in-place durante o `claude /init` headless em projetos
+  novos.
+
+#### Documentação
+- `CLAUDE.md` e `AGENTS.md` na raiz descrevem a arquitetura do
+  GHCM pra orientar agentes que venham a editar o próprio repo.
+- README documenta os pings inter-agente e a regra de fila por
+  sessão.
+
+[1.1.0]: https://github.com/gustavohcmelo/hub-agents/releases/tag/v1.1.0
+
 ## [1.0.0] — 2026-04-27
 
 Primeira versão estável. Pipeline `planner → developer → reviewer → git-manager`
