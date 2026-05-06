@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# ghcm — entrypoint do GHCM HUB-AGENTS.
+# ghcm — entrypoint do GHCM (Gated Hub CLI Manager).
 # Subcomandos: start, attach, switch, stop, status, list, plans, config, logs, clean, help
 
 set -e
 
-HUB="$HOME/agent-hub"
+HUB="$HOME/ghcm"
 LOGS="$HUB/logs"
 SESSION_PREFIX="agents-"
-GHCM_VERSION="1.1.0"
+GHCM_VERSION="2.0.0"
 
 usage() {
   cat <<'EOF'
@@ -30,10 +30,10 @@ Uso:
   ghcm --version                Mostra a versão do GHCM
 
 Arquivos:
-  ~/agent-hub/config.sh             comandos por role
-  ~/agent-hub/current-project.txt   projeto ativo
-  ~/agent-hub/state/<slug>/         planos e reviews por projeto
-  ~/agent-hub/logs/                 logs históricos (timestamped)
+  ~/ghcm/config.sh             comandos por role
+  ~/ghcm/current-project.txt   projeto ativo
+  ~/ghcm/state/<slug>/         planos e reviews por projeto
+  ~/ghcm/logs/                 logs históricos (timestamped)
 EOF
 }
 

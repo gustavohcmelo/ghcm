@@ -5,12 +5,10 @@
    | |_| |  _  | |___| |  | |
     \____|_| |_|\____|_|  |_|
 
-     H U B  -  A G E N T S
-     ------------------------
      Gated Hub CLI Manager
 ```
 
-**GHCM** = **G**ated **H**ub **C**LI **M**anager. Orquestrador multi-agente em terminal: quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios — daí o "Gated". Os arquivos de controle ficam fora do projeto, em `~/agent-hub/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
+**GHCM** = **G**ated **H**ub **C**LI **M**anager. Orquestrador multi-agente em terminal: quatro CLIs de LLM rodam simultaneamente em painéis tmux, cada um com um papel bem definido (`planner`, `developer`, `reviewer`, `git-manager`), com **gates de aprovação manuais** entre os estágios — daí o "Gated". Os arquivos de controle ficam fora do projeto, em `~/ghcm/state/<projeto>/` — o repositório de código nunca é poluído por planos/reviews.
 
 ## Por que
 
@@ -57,8 +55,8 @@ Reviews reprovadas viram correções versionadas (`-v2`, `-v3`...) — o develop
 ## Instalação
 
 ```bash
-git clone https://github.com/gustavohcmelo/hub-agents.git ~/agent-hub
-~/agent-hub/install.sh
+git clone https://github.com/gustavohcmelo/ghcm.git ~/ghcm
+~/ghcm/install.sh
 ```
 
 O instalador cria o symlink `~/.local/bin/ghcm` e verifica dependências. Se `~/.local/bin` não estiver no `PATH`, ele te avisa.
@@ -75,7 +73,7 @@ ghcm status [slug]          # planos/reviews do projeto (default: current)
 ghcm list                   # sessões tmux ativas
 ghcm plans [slug] [--pending|--all]   # lista planos (default: --all = pending + done)
 ghcm plans [slug] export <plan-id>    # gera PDF do plano em state/<slug>/exports/
-ghcm config                 # edita ~/agent-hub/config.sh
+ghcm config                 # edita ~/ghcm/config.sh
 ghcm config --reset         # restaura config.sh do template
 ghcm logs [name]            # lista logs ou mostra um específico
 ghcm logs --prune [N]       # apaga logs antigos, mantém últimos N (default 20)
@@ -134,22 +132,22 @@ Quando um plano precisa de aval externo (gestor, cliente) antes de virar tarefa 
 ghcm plans                                       # lista planos do projeto atual
 ghcm plans meu-projeto --pending                 # só pendentes do projeto X
 ghcm plans meu-projeto export login-magic-link   # gera PDF (id parcial OK)
-# -> ~/agent-hub/state/meu-projeto/exports/<id>.pdf
+# -> ~/ghcm/state/meu-projeto/exports/<id>.pdf
 ```
 
 O comando ecoa só o path no stdout — fácil capturar (`pdf=$(ghcm plans ... export ...)`) ou abrir direto (`xdg-open "$(ghcm plans ... export ...)"`). Se o id casar com mais de um plano, mostra os candidatos pra refinar.
 
 O PDF tem capa estruturada (título, projeto, status com badge colorido, criado em, ID, bloco de assinatura "Aprovado por") + corpo formatado com tipografia serif/sans-serif, headings com barra lateral colorida por tema (verde "aceitação", laranja "riscos", azul "objetivo"), code blocks estilizados e paginação no rodapé.
 
-Customização visual: edite `~/agent-hub/templates/plan-pdf.css` (cores/tamanhos) ou `~/agent-hub/templates/plan-pdf-template.html` (layout da capa). O `ghcm` não precisa mudar.
+Customização visual: edite `~/ghcm/templates/plan-pdf.css` (cores/tamanhos) ou `~/ghcm/templates/plan-pdf-template.html` (layout da capa). O `ghcm` não precisa mudar.
 
 ### Primeira vez num projeto
 
-Se o projeto não tiver `CLAUDE.md` nem `AGENTS.md`, o `ghcm start` roda `claude /init` headless antes de subir o tmux pra mapear o stack/arquitetura. Isso melhora muito a qualidade dos planos e revisões. O log é gravado em `~/agent-hub/logs/<timestamp>-init-<slug>.log` e mostrado em tempo real durante a execução (`ghcm logs` lista o histórico).
+Se o projeto não tiver `CLAUDE.md` nem `AGENTS.md`, o `ghcm start` roda `claude /init` headless antes de subir o tmux pra mapear o stack/arquitetura. Isso melhora muito a qualidade dos planos e revisões. O log é gravado em `~/ghcm/logs/<timestamp>-init-<slug>.log` e mostrado em tempo real durante a execução (`ghcm logs` lista o histórico).
 
 ## Configurando os CLIs
 
-Edite `~/agent-hub/config.sh` (ou rode `ghcm config`):
+Edite `~/ghcm/config.sh` (ou rode `ghcm config`):
 
 ```bash
 PLANNER_CMD="claude --dangerously-skip-permissions"
@@ -163,7 +161,7 @@ Misture os modelos como quiser. Restrição: **ollama não funciona em roles que
 ## Estrutura
 
 ```
-~/agent-hub/
+~/ghcm/
 ├── ghcm                              entrypoint (start | attach | switch | stop | status | list | config | logs | help)
 ├── start.sh                          setup do tmux (chamado por `ghcm start`)
 ├── install.sh                        cria symlink em ~/.local/bin

@@ -1,4 +1,4 @@
-# Configuração do agent-hub.
+# Configuração do ghcm.
 # Edite os comandos abaixo pra trocar qual CLI roda em cada pane.
 #
 # CLIs com tool use (executam comandos): claude, codex, gemini, qwen

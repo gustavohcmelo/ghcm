@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Instalador do GHCM HUB-AGENTS.
-# Uso: ~/agent-hub/install.sh
+# Instalador do GHCM (Gated Hub CLI Manager).
+# Uso: ~/ghcm/install.sh
 #
 # Cria symlink ~/.local/bin/ghcm apontando pro repo clonado.
 # Verifica dependências e avisa o que falta.

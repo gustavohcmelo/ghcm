@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-GHCM (Gated Hub CLI Manager) is a **bash-only orchestrator** that runs four LLM CLIs in four tmux panes — `planner`, `developer`, `reviewer`, `git-manager` — with manual approval gates between stages. There is no application code: everything is shell scripts, prompt files, and templates. The repo is the tool itself, installed via symlink at `~/agent-hub`.
+GHCM (Gated Hub CLI Manager) is a **bash-only orchestrator** that runs four LLM CLIs in four tmux panes — `planner`, `developer`, `reviewer`, `git-manager` — with manual approval gates between stages. There is no application code: everything is shell scripts, prompt files, and templates. The repo is the tool itself, installed via symlink at `~/ghcm`.
 
 User-facing prose (README, agent prompts, output messages) is in **pt-BR**. Code identifiers (paths, branches, commit messages, variable names) are in **English**. Preserve this split when editing.
 
@@ -21,7 +21,7 @@ shfmt -d -i 2 -ci ghcm start.sh install.sh config.example.sh
 # Run / debug the orchestrator
 ghcm start [project_dir]   # spawns tmux session 'agents-<slug>'
 ghcm status [slug]         # inspect plans/reviews queues
-ghcm logs                  # browse ~/agent-hub/logs/ (timestamped init logs)
+ghcm logs                  # browse ~/ghcm/logs/ (timestamped init logs)
 ghcm clean <slug>          # nuke state/<slug>/ (session must be stopped first)
 ```
 
@@ -31,14 +31,14 @@ There are no unit tests. Validation is end-to-end: `ghcm start` in a real git pr
 
 Two distinct trees, kept separate on purpose:
 
-- **`~/agent-hub/`** — this repo. Code (`ghcm`, `start.sh`), agent prompts (`agents/<role>/`), config (`config.sh`), templates.
-- **`~/agent-hub/state/<slug>/`** — runtime, gitignored, one subtree per project. `plans/{pending,done}/`, `reviews/{pending,done/{approved,rejected,shipped}}/`, `exports/`, `.project-path`.
+- **`~/ghcm/`** — this repo. Code (`ghcm`, `start.sh`), agent prompts (`agents/<role>/`), config (`config.sh`), templates.
+- **`~/ghcm/state/<slug>/`** — runtime, gitignored, one subtree per project. `plans/{pending,done}/`, `reviews/{pending,done/{approved,rejected,shipped}}/`, `exports/`, `.project-path`.
 
 The user's project repo is **never polluted** with plans or reviews. The slug = `basename(project_dir)`.
 
 ## Architecture: how agents find their project
 
-Critical invariant: agents derive the active project from the **tmux session name** (`tmux display-message -p '#S'`, strip `agents-` prefix), **not** from `~/agent-hub/current-project.txt`. The global file exists only as a fallback for compatibility — `Ctrl-b s` (tmux's native session switch) must remain safe, which means each pane must read the slug fresh from its own session each time it acts.
+Critical invariant: agents derive the active project from the **tmux session name** (`tmux display-message -p '#S'`, strip `agents-` prefix), **not** from `~/ghcm/current-project.txt`. The global file exists only as a fallback for compatibility — `Ctrl-b s` (tmux's native session switch) must remain safe, which means each pane must read the slug fresh from its own session each time it acts.
 
 When editing agent prompts (`agents/<role>/CLAUDE.md|AGENTS.md`), keep the slug-resolution snippet at the top intact. The reviewer uses `AGENTS.md` (codex convention); the others use `CLAUDE.md` (claude convention) — swapping a role's CLI may require renaming this file.
 
@@ -82,4 +82,4 @@ Each role's behavior is defined entirely by its prompt file. Treat these as prod
 
 ## CLI requirements
 
-The four roles are configured via `~/agent-hub/config.sh` (initialized from `config.example.sh` on first run). CLIs that need tool use (developer, git-manager, reviewer) must be `claude`, `codex`, or `gemini`. `ollama` works only for planner (text-only, no tool use).
+The four roles are configured via `~/ghcm/config.sh` (initialized from `config.example.sh` on first run). CLIs that need tool use (developer, git-manager, reviewer) must be `claude`, `codex`, or `gemini`. `ollama` works only for planner (text-only, no tool use).

@@ -5,6 +5,49 @@ Todas as mudanças relevantes deste projeto serão documentadas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 e o projeto segue [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [2.0.0] — 2026-05-06
+
+Renomeação do projeto pra alinhar com o brand `GHCM` em todo lugar.
+Sem mudanças funcionais — só path e identidade visual.
+
+### Alterado (BREAKING)
+
+- **Repositório:** `gustavohcmelo/hub-agents` → `gustavohcmelo/ghcm`.
+  GitHub mantém redirect automático nas URLs antigas, mas o nome
+  canônico é `ghcm` agora.
+- **Diretório de instalação:** `~/agent-hub` → `~/ghcm`. Variável
+  `HUB="$HOME/ghcm"` em `ghcm` e `start.sh`. Todas as referências
+  em scripts, prompts e docs atualizadas.
+- **Banner ASCII e branding:** removida a tag "HUB-AGENTS" (codinome
+  antigo). Banner agora mostra só o ASCII GHCM + tagline "Gated Hub
+  CLI Manager".
+
+### Migração
+
+Quem tem instalação anterior (`~/agent-hub`):
+
+```bash
+# pare sessões em andamento
+ghcm stop --all
+
+# mova o diretório
+mv ~/agent-hub ~/ghcm
+
+# reinstale (recria o symlink ~/.local/bin/ghcm pro novo path)
+~/ghcm/install.sh
+
+# atualize o remote do clone local (GitHub também tem redirect, mas
+# vale fixar o nome novo)
+cd ~/ghcm
+git remote set-url origin git@github.com:gustavohcmelo/ghcm.git
+git pull
+```
+
+State (`~/ghcm/state/<slug>/`) e config (`~/ghcm/config.sh`) são
+preservados pelo `mv` — nenhum plano/review é perdido.
+
+[2.0.0]: https://github.com/gustavohcmelo/ghcm/releases/tag/v2.0.0
+
 ## [1.1.0] — 2026-05-06
 
 Iteração pós-1.0.0 com foco em comunicação assíncrona entre agentes,
@@ -40,7 +83,7 @@ formato; mudanças são em torno de UX, multi-CLI e regras de operação.
 
 #### Robustez dos prompts
 - Bloco "Desambiguação crítica" em todos os roles: "este projeto"
-  sempre = `$PROJECT_PATH`, nunca `~/agent-hub`.
+  sempre = `$PROJECT_PATH`, nunca `~/ghcm`.
 - Regra "queue-first, não explora projeto" prominente no topo dos
   prompts — agente lista a fila antes de qualquer leitura
   exploratória.
@@ -65,7 +108,7 @@ formato; mudanças são em torno de UX, multi-CLI e regras de operação.
 - README documenta os pings inter-agente e a regra de fila por
   sessão.
 
-[1.1.0]: https://github.com/gustavohcmelo/hub-agents/releases/tag/v1.1.0
+[1.1.0]: https://github.com/gustavohcmelo/ghcm/releases/tag/v1.1.0
 
 ## [1.0.0] — 2026-04-27
 
@@ -101,10 +144,10 @@ validado end-to-end em projeto real (PR aberto, revisado e mergeado).
 - Polling por marker específico de cada CLI (claude, codex, gemini, ollama)
   no lugar de `sleep` fixo.
 - `claude /init` headless com tail do log em tempo real para projetos novos.
-- Logs timestamped em `~/agent-hub/logs/<ts>-init-<slug>.log`.
+- Logs timestamped em `~/ghcm/logs/<ts>-init-<slug>.log`.
 - `monitor-silence` do tmux pisca o pane border quando o agente fica idle 5s.
 - Atalho `Ctrl-b X` encerra a sessão com confirmação.
-- Configuração por role em `~/agent-hub/config.sh`
+- Configuração por role em `~/ghcm/config.sh`
   (criado a partir de `config.example.sh` no primeiro uso).
 
 #### Integração com git

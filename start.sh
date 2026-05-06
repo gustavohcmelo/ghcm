@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-HUB="$HOME/agent-hub"
+HUB="$HOME/ghcm"
 AGENTS="$HUB/agents"
 LOGS="$HUB/logs"
 
@@ -35,9 +35,7 @@ ${C_TITLE}     ____ _   _  ____ __  __
    | |_| |  _  | |___| |  | |
     \\____|_| |_|\\____|_|  |_|${C_RESET}
 
-${C_TITLE}     H U B  -  A G E N T S${C_RESET}
-${C_TAG}     ------------------------
-     Gated Hub CLI Manager${C_RESET}
+${C_TAG}     Gated Hub CLI Manager${C_RESET}
 
 EOF
 }
@@ -51,8 +49,7 @@ banner_compact() {
   fi
   cat <<EOF
 
-${C_TITLE}GHCM HUB-AGENTS${C_RESET}
-Gated Hub CLI Manager
+${C_TITLE}GHCM${C_RESET} — Gated Hub CLI Manager
 
 EOF
 }
