@@ -79,6 +79,7 @@ ghcm logs [name]            # lista logs ou mostra um específico
 ghcm logs --prune [N]       # apaga logs antigos, mantém últimos N (default 20)
 ghcm clean <slug> [--yes]   # apaga state/<slug>/ (sessão precisa estar parada)
 ghcm help                   # ajuda
+ghcm --version              # mostra a versão do GHCM
 ```
 
 Dentro do tmux:
